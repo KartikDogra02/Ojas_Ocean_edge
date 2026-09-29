@@ -11,6 +11,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    # Comma-separated frontend origins allowed to call the API from a browser, e.g.
+    # "https://app.ojasoceanedge.com,http://localhost:5173". Must be exact origins ("*" is not allowed).
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
+
     # Seeded on startup if the database has no admin user yet. Must change password on first login.
     initial_admin_email: str | None = None
     initial_admin_username: str | None = None

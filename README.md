@@ -19,7 +19,13 @@ That admin must change their password on first login.
 
 1. `POST /auth/login` with form fields `username` (or email) and `password` → returns a bearer token.
 2. Send `Authorization: Bearer <token>` on every other request.
-3. Users with a temporary password must call `POST /auth/change-password` before anything else.
+3. Passwords are temporary by default: any password set by an admin (new users, service engineers, resets) must be
+   changed with `POST /auth/change-password` before anything else works (other calls return 403 "Password change required").
+
+## CORS
+
+Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated exact origins, e.g.
+`https://app.ojasoceanedge.com,http://localhost:5173`). Restart the API after changing it.
 
 ## Roles
 
@@ -53,3 +59,5 @@ uv run fastapi dev app/main.py
 ```bash
 docker compose exec api python -m app.cli create-admin --email you@example.com --username admin
 ```
+
+The password is temporary unless you pass `--permanent-password`.
