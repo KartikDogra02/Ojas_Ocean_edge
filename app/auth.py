@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated
 
 import jwt
@@ -20,6 +21,8 @@ class Principal:
     username: str
     roles: frozenset[Role]
     must_change_password: bool
+    token_id: str
+    token_expires_at: datetime
 
     @property
     def is_admin(self) -> bool:
@@ -42,20 +45,32 @@ async def get_authenticated_principal(token: Annotated[str | None, Depends(oauth
 
     user = await get_db().users.find_one(
         {"_id": user_id},
-        {"username": 1, "roles": 1, "is_active": 1, "must_change_password": 1, "password_changed_at": 1},
+        {
+            "username": 1,
+            "roles": 1,
+            "is_active": 1,
+            "must_change_password": 1,
+            "password_changed_at": 1,
+            "tokens_revoked_at": 1,
+        },
     )
     if user is None or not user.get("is_active", False):
         raise _unauthorized()
-    # Tokens issued before the last password change are no longer valid.
-    changed_at = user.get("password_changed_at")
-    if changed_at is not None and claims["iat"] < int(changed_at.timestamp()):
+    # Tokens issued before the last password change or "log out everywhere" are no longer valid.
+    for field in ("password_changed_at", "tokens_revoked_at"):
+        cutoff = user.get(field)
+        if cutoff is not None and claims["iat"] < cutoff.timestamp():
+            raise _unauthorized()
+    if await get_db().revoked_tokens.count_documents({"_id": claims["jti"]}, limit=1):
         raise _unauthorized()
 
     return Principal(
         user_id=user["_id"],
         username=user["username"],
         roles=frozenset(Role(r) for r in user.get("roles", [])),
-        must_change_password=user.get("must_change_password", False),
+        must_change_password=user.get("must_change_password", True),
+        token_id=claims["jti"],
+        token_expires_at=datetime.fromtimestamp(claims["exp"], UTC),
     )
 
 

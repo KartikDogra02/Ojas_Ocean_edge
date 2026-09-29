@@ -35,7 +35,7 @@ def create_access_token(user_id: str) -> tuple[str, int]:
     """Return (token, lifetime in seconds)."""
     now = utcnow()
     lifetime = timedelta(minutes=settings.access_token_expire_minutes)
-    payload = {"sub": user_id, "iat": int(now.timestamp()), "exp": now + lifetime}
+    payload = {"sub": user_id, "jti": secrets.token_urlsafe(16), "iat": now.timestamp(), "exp": now + lifetime}
     token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
     return token, int(lifetime.total_seconds())
 
@@ -43,5 +43,5 @@ def create_access_token(user_id: str) -> tuple[str, int]:
 def decode_access_token(token: str) -> dict:
     """Raises jwt.InvalidTokenError if the token is invalid or expired."""
     return jwt.decode(
-        token, settings.jwt_secret, algorithms=[settings.jwt_algorithm], options={"require": ["sub", "iat", "exp"]}
+        token, settings.jwt_secret, algorithms=[settings.jwt_algorithm], options={"require": ["sub", "jti", "iat", "exp"]}
     )

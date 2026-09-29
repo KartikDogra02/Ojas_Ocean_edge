@@ -34,3 +34,5 @@ async def ensure_indexes() -> None:
         partialFilterExpression={"service_engineer.engineer_id": {"$exists": True}},
     )
     await db.users.create_index("service_engineer.territory")
+    # Logged-out tokens; Mongo deletes each entry once the token would have expired anyway.
+    await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)

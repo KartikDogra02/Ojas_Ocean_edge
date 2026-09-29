@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.auth import AuthenticatedPrincipal
+from app.auth import AuthenticatedPrincipal, Principal
 from app.db import get_db
 from app.models import PasswordChange, Token
 from app.models.common import utcnow
@@ -28,7 +28,7 @@ async def login(form: Annotated[OAuth2PasswordRequestForm, Depends()]):
 
     token, expires_in = create_access_token(str(user["_id"]))
     return Token(
-        access_token=token, expires_in=expires_in, must_change_password=user.get("must_change_password", False)
+        access_token=token, expires_in=expires_in, must_change_password=user.get("must_change_password", True)
     )
 
 
@@ -57,3 +57,26 @@ async def change_password(body: PasswordChange, principal: AuthenticatedPrincipa
     )
     token, expires_in = create_access_token(str(principal.user_id))
     return Token(access_token=token, expires_in=expires_in, must_change_password=False)
+
+
+async def _revoke(principal: Principal) -> None:
+    await get_db().revoked_tokens.update_one(
+        {"_id": principal.token_id},
+        {"$setOnInsert": {"user_id": principal.user_id, "expires_at": principal.token_expires_at}},
+        upsert=True,
+    )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(principal: AuthenticatedPrincipal):
+    """Log out: the token used for this request stops working immediately."""
+    await _revoke(principal)
+
+
+@router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_all(principal: AuthenticatedPrincipal):
+    """Log out everywhere: every token issued to this user so far stops working."""
+    now = utcnow()
+    await get_db().users.update_one({"_id": principal.user_id}, {"$set": {"tokens_revoked_at": now}})
+    # Also revoke this token explicitly (the stored cutoff is only millisecond-precise).
+    await _revoke(principal)
