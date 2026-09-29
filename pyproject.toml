@@ -1,0 +1,11 @@
+[project]
+name = "ojas-ocean-edge"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115",
+    "pymongo>=4.10",
+    "pydantic-settings>=2.6",
+    "pwdlib[argon2]>=0.2",
+    "pyjwt>=2.9",
+]
