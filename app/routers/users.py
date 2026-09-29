@@ -1,8 +1,10 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from app.auth import AuthenticatedPrincipal, require_roles
+from app.auth import AuthenticatedPrincipal, Principal, require_roles
 from app.db import get_db
 from app.models import Role, ServiceEngineerProfile, UserCreate, UserOut, UserUpdate
 from app.models.common import utcnow
@@ -12,6 +14,7 @@ from app.services import duplicate_key_error, ensure_unique, insert_user, next_e
 
 router = APIRouter(prefix="/users", tags=["users"])
 admin_only = [Depends(require_roles(Role.ADMIN))]
+Admin = Annotated[Principal, Depends(require_roles(Role.ADMIN))]
 
 # Never return the password hash.
 _PROJECTION = {"hashed_password": 0}
@@ -19,6 +22,7 @@ _PROJECTION = {"hashed_password": 0}
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, dependencies=admin_only)
 async def create_user(user: UserCreate):
+    # The admin chose this password, so the user must replace it at first login.
     return from_doc(await insert_user(user))
 
 
@@ -42,8 +46,8 @@ async def get_user(user_id: str):
     return from_doc(doc)
 
 
-@router.patch("/{user_id}", response_model=UserOut, dependencies=admin_only)
-async def update_user(user_id: str, user: UserUpdate):
+@router.patch("/{user_id}", response_model=UserOut)
+async def update_user(user_id: str, user: UserUpdate, admin: Admin):
     db = get_db()
     oid = to_oid(user_id)
     existing = await db.users.find_one({"_id": oid}, {"roles": 1, "service_engineer": 1})
@@ -56,6 +60,9 @@ async def update_user(user_id: str, user: UserUpdate):
     if user.password is not None:
         changes["hashed_password"] = hash_password(user.password.get_secret_value())
         changes["password_changed_at"] = utcnow()
+        # A password set by an admin for someone else is temporary.
+        if oid != admin.user_id:
+            changes["must_change_password"] = True
 
     final_roles = changes.get("roles", existing.get("roles", []))
     is_engineer = Role.SERVICE_ENGINEER.value in final_roles

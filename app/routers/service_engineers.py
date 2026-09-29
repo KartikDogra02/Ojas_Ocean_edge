@@ -31,7 +31,6 @@ async def provision_service_engineer(body: ServiceEngineerCreate):
         username=body.username,
         full_name=body.full_name,
         password=password,
-        must_change_password=True,
         roles=[Role.SERVICE_ENGINEER],
         service_engineer=body.model_dump(include=set(ServiceEngineerCreate.model_fields) - set(UserCreate.model_fields)),
     )

@@ -31,7 +31,6 @@ class UserBase(_UsernameLower):
 
 class UserCreate(UserBase):
     password: Password
-    must_change_password: bool = False
     service_engineer: ServiceEngineerProfile | None = None
 
     @model_validator(mode="after")
@@ -51,6 +50,7 @@ class UserUpdate(_UsernameLower):
     is_active: bool | None = None
     roles: list[Role] | None = None
     password: Password | None = None
+    # Admins can force a password change without resetting the password.
     must_change_password: bool | None = None
     service_engineer: ServiceEngineerProfileUpdate | None = None
 
@@ -60,7 +60,7 @@ class UserOut(UserBase, Timestamps):
     model_config = ConfigDict(extra="ignore")
 
     id: str
-    must_change_password: bool = False
+    must_change_password: bool = True
     service_engineer: ServiceEngineerProfileOut | None = None
 
 

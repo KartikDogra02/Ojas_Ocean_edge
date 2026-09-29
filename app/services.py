@@ -41,8 +41,10 @@ async def ensure_unique(**fields: str) -> None:
             raise duplicate_key_error(DuplicateKeyError("", details={"keyPattern": {field: 1}}))
 
 
-async def insert_user(user: UserCreate) -> dict:
+async def insert_user(user: UserCreate, *, temporary_password: bool = True) -> dict:
     """Insert a user and return the stored document without the password hash.
+
+    Passwords are temporary by default: they must be changed at first login before the API can be used.
 
     Raises HTTPException(409) if the email or username is taken.
     """
@@ -50,6 +52,7 @@ async def insert_user(user: UserCreate) -> dict:
     doc = user.model_dump(exclude={"password", "service_engineer"}) | {
         "roles": role_values(user.roles),
         "hashed_password": hash_password(user.password.get_secret_value()),
+        "must_change_password": temporary_password,
         "created_at": now,
         "updated_at": now,
     }
@@ -77,9 +80,7 @@ async def seed_initial_admin() -> None:
     if not (email and username and password):
         logger.warning("No admin user exists and INITIAL_ADMIN_* is not set; create one with `python -m app.cli`.")
         return
-    user = UserCreate(
-        email=email, username=username, password=password, roles=[Role.ADMIN], must_change_password=True
-    )
+    user = UserCreate(email=email, username=username, password=password, roles=[Role.ADMIN])
     try:
         await insert_user(user)
     except HTTPException:
