@@ -14,7 +14,8 @@ import sys
 from fastapi import HTTPException
 
 from app import db
-from app.models import Role, UserCreate
+from app.models.role import Role
+from app.models.user import UserCreate
 from app.services import insert_user
 
 

@@ -1,7 +1,6 @@
 from pydantic import SecretStr
 
-from app.models.common import StrictModel
-from app.models.user import Password
+from app.models.common import Password, StrictModel
 
 
 class Token(StrictModel):

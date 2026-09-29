@@ -12,7 +12,7 @@ docker compose up -d --build
 - API: http://localhost:8000 (interactive docs at `/docs`)
 - MongoDB: `localhost:27017` (bound to localhost only, auth required)
 
-On first start the API creates an admin user from the `INITIAL_ADMIN_*` settings if no admin exists yet.
+On startup the API creates an admin user from the `INITIAL_ADMIN_*` settings if no admin exists yet.
 That admin must change their password on first login.
 
 ## Auth
@@ -40,12 +40,13 @@ Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated ex
 
 | Endpoint | Access |
 |---|---|
-| `POST /auth/login`, `POST /auth/change-password` | Public / logged in |
+| `POST /auth/login` | Public |
+| `POST /auth/change-password`, `POST /auth/logout` | Logged in |
 | `GET /users/me` | Logged in |
-| `/users` (CRUD) | Admin |
+| `/users` (CRUD) | Admin — the `service_engineer` role is only assigned via `/service-engineers` |
 | `POST /service-engineers` | Admin — auto-allocates an `ENG-<year>-<seq>` ID and optional temporary password |
 | `GET /service-engineers?territory=&skill=&active=` | Admin, HR |
-| `GET /roles`, `GET /territories` | Logged in — values + labels for dropdowns |
+| `GET /options` | Logged in — role and territory values + labels for dropdowns |
 
 ## Local development (API outside Docker)
 
@@ -56,8 +57,10 @@ uv run fastapi dev app/main.py
 
 ## Admin CLI
 
+Create an extra admin, e.g. to recover access if every admin is locked out:
+
 ```bash
-docker compose exec api python -m app.cli create-admin --email you@example.com --username admin
+docker compose exec api python -m app.cli create-admin --email you@example.com --username admin2
 ```
 
 The password is temporary unless you pass `--permanent-password`.

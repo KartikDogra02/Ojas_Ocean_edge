@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from pydantic import ConfigDict, EmailStr, Field, SecretStr, field_validator
+from pydantic import ConfigDict, EmailStr, Field, field_validator
 
-from app.models.common import StrictModel
+from app.models.common import Password, StrictModel, Username
 from app.models.territory import Territory
 
 Phone = Annotated[str, Field(min_length=7, max_length=20, pattern=r"^\+?[0-9 ()\-.]+$")]
@@ -59,11 +59,6 @@ class ServiceEngineerCreate(ServiceEngineerProfile):
 
     full_name: str = Field(min_length=1, max_length=200)
     email: EmailStr
-    username: Annotated[str, Field(min_length=3, max_length=50, pattern=r"^[a-z0-9._-]+$")]
+    username: Username
     # Omit to have the server generate a random temporary password (returned once).
-    password: SecretStr | None = Field(default=None, min_length=8, max_length=128)
-
-    @field_validator("username", mode="before")
-    @classmethod
-    def _lower(cls, v: object) -> object:
-        return v.lower() if isinstance(v, str) else v
+    password: Password | None = None

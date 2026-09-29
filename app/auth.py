@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from app.db import get_db
-from app.models import Role
+from app.models.role import Role
 from app.security import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -51,16 +51,14 @@ async def get_authenticated_principal(token: Annotated[str | None, Depends(oauth
             "is_active": 1,
             "must_change_password": 1,
             "password_changed_at": 1,
-            "tokens_revoked_at": 1,
         },
     )
     if user is None or not user.get("is_active", False):
         raise _unauthorized()
-    # Tokens issued before the last password change or "log out everywhere" are no longer valid.
-    for field in ("password_changed_at", "tokens_revoked_at"):
-        cutoff = user.get(field)
-        if cutoff is not None and claims["iat"] < cutoff.timestamp():
-            raise _unauthorized()
+    # Tokens issued before the last password change are no longer valid.
+    changed_at = user.get("password_changed_at")
+    if changed_at is not None and claims["iat"] < changed_at.timestamp():
+        raise _unauthorized()
     if await get_db().revoked_tokens.count_documents({"_id": claims["jti"]}, limit=1):
         raise _unauthorized()
 

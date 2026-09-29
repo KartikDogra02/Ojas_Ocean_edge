@@ -6,7 +6,9 @@ from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
 from app.db import get_db
-from app.models import Role, UserCreate
+from app.models.role import Role
+from app.models.service_engineer import ServiceEngineerProfile
+from app.models.user import UserCreate
 from app.models.common import utcnow
 from app.security import hash_password
 
@@ -41,25 +43,28 @@ async def ensure_unique(**fields: str) -> None:
             raise duplicate_key_error(DuplicateKeyError("", details={"keyPattern": {field: 1}}))
 
 
-async def insert_user(user: UserCreate, *, temporary_password: bool = True) -> dict:
+async def insert_user(
+    user: UserCreate, *, service_engineer: ServiceEngineerProfile | None = None, temporary_password: bool = True
+) -> dict:
     """Insert a user and return the stored document without the password hash.
 
-    Passwords are temporary by default: they must be changed at first login before the API can be used.
+    Passing a service_engineer profile allocates an engineer ID. Passwords are temporary by default:
+    they must be changed at first login before the API can be used.
 
     Raises HTTPException(409) if the email or username is taken.
     """
     now = utcnow()
-    doc = user.model_dump(exclude={"password", "service_engineer"}) | {
+    doc = user.model_dump(exclude={"password"}) | {
         "roles": role_values(user.roles),
         "hashed_password": hash_password(user.password.get_secret_value()),
         "must_change_password": temporary_password,
         "created_at": now,
         "updated_at": now,
     }
-    if user.service_engineer is not None:
+    if service_engineer is not None:
         # Check for duplicates first so failed inserts don't burn sequential engineer IDs.
         await ensure_unique(email=user.email, username=user.username)
-        doc["service_engineer"] = {"engineer_id": await next_engineer_id()} | user.service_engineer.model_dump()
+        doc["service_engineer"] = {"engineer_id": await next_engineer_id()} | service_engineer.model_dump()
     try:
         await get_db().users.insert_one(doc)
     except DuplicateKeyError as exc:
@@ -78,7 +83,7 @@ async def seed_initial_admin() -> None:
         settings.initial_admin_password,
     )
     if not (email and username and password):
-        logger.warning("No admin user exists and INITIAL_ADMIN_* is not set; create one with `python -m app.cli`.")
+        logger.warning("No admin user exists and INITIAL_ADMIN_* is not set; set them and restart, or use `python -m app.cli`.")
         return
     user = UserCreate(email=email, username=username, password=password, roles=[Role.ADMIN])
     try:

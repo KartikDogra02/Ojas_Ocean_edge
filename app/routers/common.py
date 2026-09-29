@@ -2,6 +2,9 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import HTTPException, status
 
+# Never return the password hash.
+USER_PROJECTION = {"hashed_password": 0}
+
 
 def to_oid(value: str) -> ObjectId:
     try:
