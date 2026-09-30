@@ -6,6 +6,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
 from app.db import get_db
+from app.models.permission import default_menu_permissions
 from app.models.role import SYSTEM_ROLE_DESCRIPTIONS, Role
 from app.models.service_engineer import ServiceEngineerProfile
 from app.models.user import UserCreate
@@ -42,6 +43,7 @@ async def seed_system_roles() -> None:
                         "name": role.label,
                         "description": SYSTEM_ROLE_DESCRIPTIONS[role],
                         "is_active": True,
+                        "menu_permissions": default_menu_permissions(role.value),
                         "created_at": now,
                         "updated_at": now,
                     },

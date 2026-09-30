@@ -38,7 +38,7 @@ class RoleUpdate(StrictModel):
 
 
 class RoleOut(Timestamps):
-    # Built from role documents; ignore any internal fields.
+    # Built from role documents, which also hold menu_permissions.
     model_config = ConfigDict(extra="ignore")
 
     id: str
