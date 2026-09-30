@@ -29,12 +29,17 @@ Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated ex
 
 ## Roles
 
+The four built-in system roles are created on startup and can't be deleted or renamed:
+
 | Role | Can |
 |---|---|
-| `admin` | Everything, including creating/editing/deleting users and service engineers |
-| `hr_team` | View service engineers |
+| `admin` | Everything, including users and roles |
+| `hr_team` | View service engineers and roles |
 | `technical_team` | Basic access |
 | `service_engineer` | Basic access, view own profile (`GET /users/me`) |
+
+Admins can add custom roles (e.g. `sonar_specialist`) via `/roles` and assign them to users. API access itself is
+governed by the system roles.
 
 ## Main endpoints
 
@@ -46,7 +51,9 @@ Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated ex
 | `/users` (CRUD) | Admin — the `service_engineer` role is only assigned via `/service-engineers` |
 | `POST /service-engineers` | Admin — auto-allocates an `ENG-<year>-<seq>` ID and optional temporary password |
 | `GET /service-engineers?territory=&skill=&active=` | Admin, HR |
-| `GET /options` | Logged in — role and territory values + labels for dropdowns |
+| `GET /options` | Logged in — active roles and territories (value + label) for dropdowns |
+| `GET /roles`, `GET /roles/{id_or_code}` | Admin, HR — with `user_count` |
+| `POST`/`PATCH`/`DELETE /roles...` | Admin — custom roles; system roles can't be renamed, deactivated or deleted |
 
 ## Local development (API outside Docker)
 
