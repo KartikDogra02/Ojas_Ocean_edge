@@ -52,6 +52,12 @@ async def seed_system_roles() -> None:
             )
         except DuplicateKeyError:
             pass  # another worker inserted it concurrently
+        # Menu items added since the role was created get their default access; existing choices are kept.
+        for menu_id, allowed in default_menu_permissions(role.value).items():
+            await get_db().roles.update_one(
+                {"code": role.value, f"menu_permissions.{menu_id}": {"$exists": False}},
+                {"$set": {f"menu_permissions.{menu_id}": allowed}},
+            )
 
 
 async def next_sequence(counter: str, prefix: str) -> str:
