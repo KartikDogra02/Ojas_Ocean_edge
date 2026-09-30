@@ -33,13 +33,13 @@ The four built-in system roles are created on startup and can't be deleted or re
 
 | Role | Can |
 |---|---|
-| `admin` | Everything, including users and roles |
+| `admin` | Everything, including users, roles and the menu permission matrix |
 | `hr_team` | View service engineers and roles |
 | `technical_team` | Basic access |
 | `service_engineer` | Basic access, view own profile (`GET /users/me`) |
 
-Admins can add custom roles (e.g. `sonar_specialist`) via `/roles` and assign them to users. API access itself is
-governed by the system roles.
+Admins can add custom roles (e.g. `sonar_specialist`) via `/roles` and assign them to users. Custom roles control
+which frontend menus a user sees (via the permission matrix); API access itself is governed by the system roles.
 
 ## Main endpoints
 
@@ -54,6 +54,8 @@ governed by the system roles.
 | `GET /options` | Logged in — active roles and territories (value + label) for dropdowns |
 | `GET /roles`, `GET /roles/{id_or_code}` | Admin, HR — with `user_count` |
 | `POST`/`PATCH`/`DELETE /roles...` | Admin — custom roles; system roles can't be renamed, deactivated or deleted |
+| `GET /roles/permissions/matrix` | Logged in — which roles see each menu item |
+| `PUT /roles/permissions/matrix` | Admin — bulk update; all entries are validated before any are saved |
 
 ## Local development (API outside Docker)
 
