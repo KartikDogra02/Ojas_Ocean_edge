@@ -19,14 +19,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 class Principal:
     user_id: ObjectId
     username: str
-    roles: frozenset[str]  # role codes, including custom roles
+    roles: frozenset[Role]
     must_change_password: bool
     token_id: str
     token_expires_at: datetime
 
     @property
     def is_admin(self) -> bool:
-        return Role.ADMIN.value in self.roles
+        return Role.ADMIN in self.roles
 
 
 def _unauthorized(detail: str = "Invalid or expired token") -> HTTPException:
@@ -65,7 +65,7 @@ async def get_authenticated_principal(token: Annotated[str | None, Depends(oauth
     return Principal(
         user_id=user["_id"],
         username=user["username"],
-        roles=frozenset(user.get("roles", [])),
+        roles=frozenset(Role(r) for r in user.get("roles", [])),
         must_change_password=user.get("must_change_password", True),
         token_id=claims["jti"],
         token_expires_at=datetime.fromtimestamp(claims["exp"], UTC),
@@ -87,10 +87,9 @@ CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
 
 def require_roles(*allowed: Role):
     """Dependency that allows the request only if the caller has at least one of `allowed` roles."""
-    codes = {r.value for r in allowed}
 
     async def checker(principal: CurrentPrincipal) -> Principal:
-        if not principal.roles.intersection(codes):
+        if not principal.roles.intersection(allowed):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
         return principal
 

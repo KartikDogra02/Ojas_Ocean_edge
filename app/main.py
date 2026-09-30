@@ -6,14 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import db
 from app.auth import get_principal
 from app.config import settings
-from app.routers import auth, options, roles, service_engineers, users
-from app.services import seed_initial_admin, seed_system_roles
+from app.routers import auth, options, service_engineers, users
+from app.services import seed_initial_admin
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.connect()
-    await seed_system_roles()
     await seed_initial_admin()
     yield
     await db.disconnect()
@@ -33,7 +32,6 @@ app.add_middleware(
 )
 authenticated = [Depends(get_principal)]
 app.include_router(options.router, dependencies=authenticated)
-app.include_router(roles.router, dependencies=authenticated)
 app.include_router(users.router)  # routes declare their own auth (/users/me allows a pending password change)
 app.include_router(service_engineers.router, dependencies=authenticated)
 app.include_router(auth.router)

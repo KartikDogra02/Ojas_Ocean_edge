@@ -29,17 +29,12 @@ Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated ex
 
 ## Roles
 
-The four built-in system roles are created on startup and can't be deleted or renamed:
-
 | Role | Can |
 |---|---|
-| `admin` | Everything, including users, roles and the menu permission matrix |
-| `hr_team` | View service engineers and roles |
+| `admin` | Everything, including creating/editing/deleting users and service engineers |
+| `hr_team` | View service engineers |
 | `technical_team` | Basic access |
 | `service_engineer` | Basic access, view own profile (`GET /users/me`) |
-
-Admins can add custom roles (e.g. `sonar_specialist`) via `/roles` and assign them to users. Custom roles control
-which frontend menus a user sees (via the permission matrix); API access itself is governed by the system roles.
 
 ## Main endpoints
 
@@ -51,11 +46,7 @@ which frontend menus a user sees (via the permission matrix); API access itself 
 | `/users` (CRUD) | Admin — the `service_engineer` role is only assigned via `/service-engineers` |
 | `POST /service-engineers` | Admin — auto-allocates an `ENG-<year>-<seq>` ID and optional temporary password |
 | `GET /service-engineers?territory=&skill=&active=` | Admin, HR |
-| `GET /options` | Logged in — active roles and territories (value + label) for dropdowns |
-| `GET /roles`, `GET /roles/{id_or_code}` | Admin, HR — with `user_count` |
-| `POST`/`PATCH`/`DELETE /roles...` | Admin — custom roles; system roles can't be renamed, deactivated or deleted |
-| `GET /roles/permissions/matrix` | Logged in — which roles see each menu item |
-| `PUT /roles/permissions/matrix` | Admin — bulk update; all entries are validated before any are saved |
+| `GET /options` | Logged in — role and territory values + labels for dropdowns |
 
 ## Local development (API outside Docker)
 

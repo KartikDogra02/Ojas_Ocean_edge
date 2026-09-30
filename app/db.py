@@ -25,7 +25,6 @@ def get_db() -> AsyncDatabase:
 
 async def ensure_indexes() -> None:
     db = get_db()
-    await db.roles.create_index("code", unique=True)
     await db.users.create_index("email", unique=True)
     await db.users.create_index("username", unique=True)
     await db.users.create_index("roles")
