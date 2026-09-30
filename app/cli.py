@@ -16,7 +16,7 @@ from fastapi import HTTPException
 from app import db
 from app.models.role import Role
 from app.models.user import UserCreate
-from app.services import insert_user
+from app.services import insert_user, seed_system_roles
 
 
 async def create_admin(email: str, username: str, full_name: str | None, temporary: bool) -> None:
@@ -24,6 +24,7 @@ async def create_admin(email: str, username: str, full_name: str | None, tempora
     user = UserCreate(email=email, username=username, full_name=full_name, password=password, roles=[Role.ADMIN])
     await db.connect()
     try:
+        await seed_system_roles()
         try:
             doc = await insert_user(user, temporary_password=temporary)
         except HTTPException as exc:

@@ -6,7 +6,8 @@ from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
 from app.db import get_db
-from app.models.role import Role
+from app.models.permission import default_menu_permissions
+from app.models.role import SYSTEM_ROLE_DESCRIPTIONS, Role
 from app.models.service_engineer import ServiceEngineerProfile
 from app.models.user import UserCreate
 from app.models.common import utcnow
@@ -15,8 +16,42 @@ from app.security import hash_password
 logger = logging.getLogger(__name__)
 
 
-def role_values(roles: list[Role]) -> list[str]:
-    return sorted({r.value for r in roles})
+def role_values(roles: list[str]) -> list[str]:
+    return sorted(set(roles))
+
+
+async def ensure_roles_exist(roles: list[str]) -> None:
+    """Raise 422 unless every role code exists and is active."""
+    if not roles:
+        return
+    found = await get_db().roles.distinct("code", {"code": {"$in": roles}, "is_active": True})
+    missing = sorted(set(roles) - set(found))
+    if missing:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown or inactive roles: {', '.join(missing)}")
+
+
+async def seed_system_roles() -> None:
+    """Make sure the built-in roles exist. Existing roles keep their current settings."""
+    now = utcnow()
+    for role in Role:
+        try:
+            await get_db().roles.update_one(
+                {"code": role.value},
+                {
+                    "$set": {"is_system": True},
+                    "$setOnInsert": {
+                        "name": role.label,
+                        "description": SYSTEM_ROLE_DESCRIPTIONS[role],
+                        "is_active": True,
+                        "menu_permissions": default_menu_permissions(role.value),
+                        "created_at": now,
+                        "updated_at": now,
+                    },
+                },
+                upsert=True,
+            )
+        except DuplicateKeyError:
+            pass  # another worker inserted it concurrently
 
 
 async def next_engineer_id() -> str:
@@ -53,6 +88,7 @@ async def insert_user(
 
     Raises HTTPException(409) if the email or username is taken.
     """
+    await ensure_roles_exist(user.roles)
     now = utcnow()
     doc = user.model_dump(exclude={"password"}) | {
         "roles": role_values(user.roles),
