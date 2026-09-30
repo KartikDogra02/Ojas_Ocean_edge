@@ -30,6 +30,7 @@ MENU_ITEMS: list[MenuItem] = [
             "straighten",
             "/portal/reference-standards",
         ),
+        ("menu-certificates", "Calibration Certificates", "Calibration", "workspace_premium", "/portal/certificates"),
     ]
 ]
 MENU_IDS = {m.menu_id for m in MENU_ITEMS}
@@ -42,6 +43,7 @@ _DEFAULT_ACCESS: dict[str, set[str]] = {
     "menu-service-engineers": {Role.HR_TEAM},
     "menu-subsea": {Role.TECHNICAL_TEAM},
     "menu-reference-standards": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-certificates": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
 }
 
 
