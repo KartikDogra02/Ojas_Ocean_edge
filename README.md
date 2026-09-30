@@ -56,6 +56,9 @@ which frontend menus a user sees (via the permission matrix); API access itself 
 | `POST`/`PATCH`/`DELETE /roles...` | Admin — custom roles; system roles can't be renamed, deactivated or deleted |
 | `GET /roles/permissions/matrix` | Logged in — which roles see each menu item |
 | `PUT /roles/permissions/matrix` | Admin — bulk update; all entries are validated before any are saved |
+| `GET /reference-standards?due_before=&storage_location_id=` | Logged in — sorted by due date |
+| `POST /reference-standards` | Technical team, service engineers |
+| `PATCH`/`DELETE /reference-standards/{id}` | Admin, technical team — can't delete a standard used by a certificate |
 
 ## Local development (API outside Docker)
 

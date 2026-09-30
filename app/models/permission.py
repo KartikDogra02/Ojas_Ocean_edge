@@ -23,6 +23,13 @@ MENU_ITEMS: list[MenuItem] = [
         ("menu-roles", "Roles & Permissions", "Administration", "admin_panel_settings", "/portal/roles"),
         ("menu-service-engineers", "Service Engineers", "Workforce", "engineering", "/portal/service-engineers"),
         ("menu-subsea", "Subsea Navigation", "Marine Operations", "radar", "/portal/subsea"),
+        (
+            "menu-reference-standards",
+            "Reference Standards",
+            "Calibration",
+            "straighten",
+            "/portal/reference-standards",
+        ),
     ]
 ]
 MENU_IDS = {m.menu_id for m in MENU_ITEMS}
@@ -34,6 +41,7 @@ _DEFAULT_ACCESS: dict[str, set[str]] = {
     "menu-roles": {Role.HR_TEAM},
     "menu-service-engineers": {Role.HR_TEAM},
     "menu-subsea": {Role.TECHNICAL_TEAM},
+    "menu-reference-standards": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
 }
 
 
