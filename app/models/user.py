@@ -1,7 +1,7 @@
 from pydantic import ConfigDict, EmailStr, Field
 
 from app.models.common import Password, StrictModel, Timestamps, Username
-from app.models.role import Role
+from app.models.role import RoleCode
 from app.models.service_engineer import ServiceEngineerProfileOut, ServiceEngineerProfileUpdate
 
 
@@ -10,7 +10,7 @@ class UserBase(StrictModel):
     username: Username
     full_name: str | None = Field(default=None, max_length=200)
     is_active: bool = True
-    roles: list[Role] = Field(default_factory=list)
+    roles: list[RoleCode] = Field(default_factory=list)
 
 
 class UserCreate(UserBase):
@@ -22,7 +22,7 @@ class UserUpdate(StrictModel):
     username: Username | None = None
     full_name: str | None = Field(default=None, max_length=200)
     is_active: bool | None = None
-    roles: list[Role] | None = None
+    roles: list[RoleCode] | None = None
     password: Password | None = None
     # Admins can force a password change without resetting the password.
     must_change_password: bool | None = None

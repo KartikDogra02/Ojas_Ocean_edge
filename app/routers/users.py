@@ -11,7 +11,7 @@ from app.models.role import Role
 from app.models.user import UserCreate, UserOut, UserUpdate
 from app.routers.common import USER_PROJECTION, from_doc, to_oid
 from app.security import hash_password
-from app.services import duplicate_key_error, insert_user, role_values
+from app.services import duplicate_key_error, ensure_roles_exist, insert_user, role_values
 
 router = APIRouter(prefix="/users", tags=["users"])
 admin_only = [Depends(require_roles(Role.ADMIN))]
@@ -29,8 +29,8 @@ async def create_user(user: UserCreate):
 
 
 @router.get("", response_model=list[UserOut], dependencies=admin_only)
-async def list_users(role: Role | None = None, limit: int = 100):
-    query = {"roles": role.value} if role else {}
+async def list_users(role: str | None = None, limit: int = 100):
+    query = {"roles": role.lower()} if role else {}
     return [from_doc(d) async for d in get_db().users.find(query, USER_PROJECTION).limit(limit)]
 
 
@@ -61,6 +61,7 @@ async def update_user(user_id: str, user: UserUpdate, admin: Admin):
     if user.roles is not None:
         if (Role.SERVICE_ENGINEER in user.roles) != is_engineer:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, _ENGINEER_ROLE_ERROR)
+        await ensure_roles_exist(user.roles)
         changes["roles"] = role_values(user.roles)
     if user.password is not None:
         changes["hashed_password"] = hash_password(user.password.get_secret_value())
