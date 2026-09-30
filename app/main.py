@@ -7,12 +7,13 @@ from app import db
 from app.auth import get_principal
 from app.config import settings
 from app.routers import auth, options, service_engineers, users
-from app.services import seed_initial_admin
+from app.services import seed_initial_admin, seed_system_roles
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.connect()
+    await seed_system_roles()
     await seed_initial_admin()
     yield
     await db.disconnect()
