@@ -22,7 +22,11 @@ MENU_ITEMS: list[MenuItem] = [
         ("menu-users", "User Management", "Administration", "manage_accounts", "/portal/users"),
         ("menu-roles", "Roles & Permissions", "Administration", "admin_panel_settings", "/portal/roles"),
         ("menu-service-engineers", "Service Engineers", "Workforce", "engineering", "/portal/service-engineers"),
+        ("menu-vessel-ais", "Vessel & AIS Tracking", "Marine Operations", "directions_boat", "/portal/vessels"),
+        ("menu-rig-telemetry", "Offshore Rig Telemetry", "Marine Operations", "sensors", "/portal/telemetry"),
         ("menu-subsea", "Subsea Navigation", "Marine Operations", "radar", "/portal/subsea"),
+        ("menu-logistics", "Fleet Field Logistics", "Field Coordination", "local_shipping", "/portal/logistics"),
+        ("menu-reports", "Operational Reports", "Field Coordination", "assessment", "/portal/reports"),
         (
             "menu-reference-standards",
             "Reference Standards",
@@ -41,7 +45,11 @@ _DEFAULT_ACCESS: dict[str, set[str]] = {
     "menu-users": {Role.HR_TEAM},
     "menu-roles": {Role.HR_TEAM},
     "menu-service-engineers": {Role.HR_TEAM},
+    "menu-vessel-ais": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-rig-telemetry": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-subsea": {Role.TECHNICAL_TEAM},
+    "menu-logistics": {Role.HR_TEAM, Role.SERVICE_ENGINEER},
+    "menu-reports": {Role.HR_TEAM, Role.TECHNICAL_TEAM},
     "menu-reference-standards": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-certificates": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
 }
