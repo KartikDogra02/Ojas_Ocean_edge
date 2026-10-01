@@ -65,6 +65,9 @@ which frontend menus a user sees (via the permission matrix); API access itself 
 | `GET /certificates/{id_or_number}` | Logged in — e.g. `CAL-2026-001` |
 | `POST /certificates` | Technical team, service engineers — auto-numbered; standards must be in calibration |
 | `DELETE /certificates/{id}` | Admin |
+| `GET /work-plans?priority=&status=&engineer_id=&customer=` | Admin, HR, technical team see all; service engineers see plans they're assigned to |
+| `GET /work-plans/{id_or_number}` | As above — e.g. `WP-2026-001` |
+| `POST`/`PATCH`/`DELETE /work-plans...` | Admin, technical team — assign engineers by ID (`ENG-2026-001`); none = draft |
 
 ## Local development (API outside Docker)
 
