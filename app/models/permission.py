@@ -66,7 +66,13 @@ class MenuItemPermissions(MenuItem):
     permissions: dict[str, bool]
 
 
+class RoleSummary(BaseModel):
+    code: str
+    name: str
+
+
 class PermissionMatrix(BaseModel):
+    roles: list[RoleSummary]
     menu_items: list[MenuItemPermissions]
 
 
@@ -84,3 +90,34 @@ class MatrixUpdateResult(BaseModel):
     detail: str
     updated_records: int
     timestamp: datetime
+
+
+# ---- /permissions (bulk save by menu item, and the current user's menus) ----
+
+
+class MenuPermissions(StrictModel):
+    menu_id: str
+    permissions: dict[RoleCode, bool]
+
+
+class PermissionsUpdate(StrictModel):
+    permissions: list[MenuPermissions] = Field(min_length=1)
+
+
+class PermissionsUpdateResult(BaseModel):
+    detail: str
+    updated_count: int
+    timestamp: datetime
+
+
+class AuthorizedMenu(BaseModel):
+    menu_id: str
+    menu_title: str
+    icon: str
+    route: str
+
+
+class MyPermissions(BaseModel):
+    user_id: str
+    roles: list[str]
+    authorized_menus: list[AuthorizedMenu]

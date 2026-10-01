@@ -54,8 +54,10 @@ which frontend menus a user sees (via the permission matrix); API access itself 
 | `GET /options` | Logged in — active roles and territories (value + label) for dropdowns |
 | `GET /roles`, `GET /roles/{id_or_code}` | Admin, HR — with `user_count` |
 | `POST`/`PATCH`/`DELETE /roles...` | Admin — custom roles; system roles can't be renamed, deactivated or deleted |
-| `GET /roles/permissions/matrix` | Logged in — which roles see each menu item |
-| `PUT /roles/permissions/matrix` | Admin — bulk update; all entries are validated before any are saved |
+| `GET /permissions` (alias `/roles/permissions/matrix`) | Logged in — roles plus which roles see each menu item |
+| `PUT /permissions` | Admin — bulk save per menu item (`{"permissions": [{menu_id, permissions: {role: bool}}]}`) |
+| `PUT /roles/permissions/matrix` | Admin — bulk save as `{"matrix": [{menu_id, role_code, is_allowed}]}` |
+| `GET /permissions/me` (alias `/users/me/permissions`) | Logged in — menus the current user may see (sidebar) |
 | `GET /reference-standards?due_before=&storage_location_id=` | Logged in — sorted by due date |
 | `POST /reference-standards` | Technical team, service engineers |
 | `PATCH`/`DELETE /reference-standards/{id}` | Admin, technical team — can't delete a standard used by a certificate |
