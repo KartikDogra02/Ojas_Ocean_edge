@@ -6,7 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import db
 from app.auth import get_principal
 from app.config import settings
-from app.routers import auth, certificates, options, permissions, reference_standards, roles, service_engineers, users
+from app.routers import (
+    auth,
+    certificates,
+    options,
+    permissions,
+    reference_standards,
+    roles,
+    service_engineers,
+    users,
+    work_plans,
+)
 from app.services import seed_initial_admin, seed_system_roles
 
 
@@ -39,6 +49,7 @@ app.include_router(users.router)  # routes declare their own auth (/users/me all
 app.include_router(service_engineers.router, dependencies=authenticated)
 app.include_router(reference_standards.router, dependencies=authenticated)
 app.include_router(certificates.router, dependencies=authenticated)
+app.include_router(work_plans.router, dependencies=authenticated)
 app.include_router(auth.router)
 
 

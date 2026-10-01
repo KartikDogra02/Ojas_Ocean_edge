@@ -42,5 +42,8 @@ async def ensure_indexes() -> None:
     await db.certificates.create_index("reference_standard_ids")
     await db.certificates.create_index("serial_number")
     await db.certificates.create_index("customer")
+    await db.work_plans.create_index("plan_number", unique=True)
+    await db.work_plans.create_index("assigned_engineer_ids")
+    await db.work_plans.create_index("customer.company")
     # Logged-out tokens; Mongo deletes each entry once the token would have expired anyway.
     await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
