@@ -1,20 +1,12 @@
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
-from pymongo import ReturnDocument, UpdateOne
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from app.auth import require_roles
 from app.db import get_db
 from app.models.common import utcnow
-from app.models.permission import (
-    MENU_IDS,
-    MENU_ITEMS,
-    MatrixUpdate,
-    MatrixUpdateResult,
-    MenuItemPermissions,
-    PermissionMatrix,
-    default_menu_permissions,
-)
+from app.models.permission import default_menu_permissions
 from app.models.role import Role, RoleCreate, RoleOut, RoleUpdate
 from app.routers.common import from_doc
 
@@ -51,57 +43,6 @@ async def _user_counts(codes: list[str]) -> dict[str, int]:
 async def _out(role: dict) -> RoleOut:
     counts = await _user_counts([role["code"]])
     return RoleOut(**from_doc(role), user_count=counts.get(role["code"], 0))
-
-
-# ---- Menu permission matrix (declared before /{role_id_or_code} routes) ----
-
-
-@router.get("/permissions/matrix", response_model=PermissionMatrix)
-async def get_permission_matrix():
-    """Which roles can see each menu item. Admin always has access to everything."""
-    roles = [r async for r in get_db().roles.find({}, {"code": 1, "menu_permissions": 1}).sort("code", 1)]
-    return PermissionMatrix(
-        menu_items=[
-            MenuItemPermissions(
-                **item.model_dump(),
-                permissions={
-                    r["code"]: r["code"] == Role.ADMIN or r.get("menu_permissions", {}).get(item.menu_id, False)
-                    for r in roles
-                },
-            )
-            for item in MENU_ITEMS
-        ]
-    )
-
-
-@router.put("/permissions/matrix", response_model=MatrixUpdateResult, dependencies=admin_only)
-async def update_permission_matrix(body: MatrixUpdate):
-    """Validate every entry first, then apply them all in one bulk write."""
-    unknown_menus = sorted({e.menu_id for e in body.matrix} - MENU_IDS)
-    codes = {e.role_code for e in body.matrix}
-    unknown_roles = sorted(codes - set(await get_db().roles.distinct("code", {"code": {"$in": list(codes)}})))
-    if unknown_menus:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown menu_id(s): {', '.join(unknown_menus)}")
-    if unknown_roles:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown role code(s): {', '.join(unknown_roles)}")
-    if any(e.role_code == Role.ADMIN and not e.is_allowed for e in body.matrix):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Admin always has access to every menu")
-
-    now = utcnow()
-    await get_db().roles.bulk_write(
-        [
-            UpdateOne(
-                {"code": e.role_code}, {"$set": {f"menu_permissions.{e.menu_id}": e.is_allowed, "updated_at": now}}
-            )
-            for e in body.matrix
-        ]
-    )
-    return MatrixUpdateResult(
-        detail="Role menu permissions matrix updated successfully", updated_records=len(body.matrix), timestamp=now
-    )
-
-
-# ---- Roles CRUD ----
 
 
 @router.get("", response_model=list[RoleOut], dependencies=admin_or_hr)

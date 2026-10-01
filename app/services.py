@@ -52,18 +52,24 @@ async def seed_system_roles() -> None:
             )
         except DuplicateKeyError:
             pass  # another worker inserted it concurrently
+        # Menu items added since the role was created get their default access; existing choices are kept.
+        for menu_id, allowed in default_menu_permissions(role.value).items():
+            await get_db().roles.update_one(
+                {"code": role.value, f"menu_permissions.{menu_id}": {"$exists": False}},
+                {"$set": {f"menu_permissions.{menu_id}": allowed}},
+            )
 
 
-async def next_engineer_id() -> str:
-    """Allocate the next sequential engineer ID, e.g. ENG-2026-106. Numbering restarts each year."""
+async def next_sequence(counter: str, prefix: str) -> str:
+    """Allocate the next sequential number, e.g. ENG-2026-106. Numbering restarts each year."""
     year = utcnow().year
-    counter = await get_db().counters.find_one_and_update(
-        {"_id": f"engineer_id:{year}"},
+    doc = await get_db().counters.find_one_and_update(
+        {"_id": f"{counter}:{year}"},
         {"$inc": {"seq": 1}},
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )
-    return f"ENG-{year}-{counter['seq']:03d}"
+    return f"{prefix}-{year}-{doc['seq']:03d}"
 
 
 def duplicate_key_error(exc: DuplicateKeyError) -> HTTPException:
@@ -100,7 +106,7 @@ async def insert_user(
     if service_engineer is not None:
         # Check for duplicates first so failed inserts don't burn sequential engineer IDs.
         await ensure_unique(email=user.email, username=user.username)
-        doc["service_engineer"] = {"engineer_id": await next_engineer_id()} | service_engineer.model_dump()
+        doc["service_engineer"] = {"engineer_id": await next_sequence("engineer_id", "ENG")} | service_engineer.model_dump()
     try:
         await get_db().users.insert_one(doc)
     except DuplicateKeyError as exc:

@@ -85,13 +85,13 @@ async def get_principal(principal: AuthenticatedPrincipal) -> Principal:
 CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
 
 
-def require_roles(*allowed: Role):
+def require_roles(*allowed: Role, detail: str = "Insufficient role"):
     """Dependency that allows the request only if the caller has at least one of `allowed` roles."""
     codes = {r.value for r in allowed}
 
     async def checker(principal: CurrentPrincipal) -> Principal:
         if not principal.roles.intersection(codes):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail)
         return principal
 
     return checker
