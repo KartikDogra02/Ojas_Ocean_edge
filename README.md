@@ -51,6 +51,9 @@ which frontend menus a user sees (via the permission matrix); API access itself 
 | `/users` (CRUD) | Admin — the `service_engineer` role is only assigned via `/service-engineers` |
 | `POST /service-engineers` | Admin — auto-allocates an `ENG-<year>-<seq>` ID and optional temporary password |
 | `GET /service-engineers?territory=&skill=&active=` | Admin, HR |
+| `PUT`/`DELETE /service-engineers/{engineer_id}/signature` | Admin — signature PNG only, up to `SIGNATURE_MAX_KB` (stored in GridFS) |
+| `GET /service-engineers/{engineer_id}/signature` | Admin, HR — returns the PNG |
+| `PUT`/`GET`/`DELETE /users/me/signature` | Service engineers — manage your own signature |
 | `GET /options` | Logged in — active roles and territories (value + label) for dropdowns |
 | `GET /roles`, `GET /roles/{id_or_code}` | Admin, HR — with `user_count` |
 | `POST`/`PATCH`/`DELETE /roles...` | Admin — custom roles; system roles can't be renamed, deactivated or deleted |

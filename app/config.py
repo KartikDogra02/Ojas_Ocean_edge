@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
 
+    # Maximum size of a service engineer's signature PNG.
+    signature_max_kb: int = 1024
     # Expense claims: mileage reimbursement rate (USD per km) and maximum receipt upload size.
     mileage_rate_per_km: float = 0.42
     receipt_max_mb: int = 10

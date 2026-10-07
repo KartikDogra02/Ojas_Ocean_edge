@@ -15,6 +15,7 @@ from app.routers import (
     reference_standards,
     roles,
     service_engineers,
+    signatures,
     users,
     work_plans,
 )
@@ -48,6 +49,7 @@ app.include_router(roles.router, dependencies=authenticated)
 app.include_router(permissions.router, dependencies=authenticated)
 app.include_router(users.router)  # routes declare their own auth (/users/me allows a pending password change)
 app.include_router(service_engineers.router, dependencies=authenticated)
+app.include_router(signatures.router, dependencies=authenticated)
 app.include_router(reference_standards.router, dependencies=authenticated)
 app.include_router(certificates.router, dependencies=authenticated)
 app.include_router(work_plans.router, dependencies=authenticated)
