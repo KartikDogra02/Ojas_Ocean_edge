@@ -43,7 +43,7 @@ MENU_IDS = {m.menu_id for m in MENU_ITEMS}
 
 # Initial access for system roles when they are first seeded. Admin always sees everything.
 _DEFAULT_ACCESS: dict[str, set[str]] = {
-    "menu-dashboard": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-dashboard": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER, Role.OWNER},
     "menu-users": {Role.HR_TEAM},
     "menu-roles": {Role.HR_TEAM},
     "menu-service-engineers": {Role.HR_TEAM},
@@ -55,7 +55,7 @@ _DEFAULT_ACCESS: dict[str, set[str]] = {
     "menu-reference-standards": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-certificates": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-work-plans": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
-    "menu-expense-claims": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-expense-claims": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER, Role.OWNER},
 }
 
 

@@ -14,6 +14,7 @@ class Role(LabeledEnum):
     HR_TEAM = "hr_team", "HR Team"
     TECHNICAL_TEAM = "technical_team", "Technical Team"
     SERVICE_ENGINEER = "service_engineer", "Service Engineer"
+    OWNER = "owner", "Owner"
 
 
 SYSTEM_ROLE_DESCRIPTIONS: dict[Role, str] = {
@@ -21,6 +22,7 @@ SYSTEM_ROLE_DESCRIPTIONS: dict[Role, str] = {
     Role.HR_TEAM: "Personnel records, onboarding and service engineer workforce management",
     Role.TECHNICAL_TEAM: "Marine telemetry, subsea sensors diagnostics, and offshore asset monitoring",
     Role.SERVICE_ENGINEER: "Field service, maintenance and offshore job dispatches",
+    Role.OWNER: "Company owner — final approval of expense claims before HR reimburses them",
 }
 
 
