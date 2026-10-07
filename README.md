@@ -68,6 +68,12 @@ which frontend menus a user sees (via the permission matrix); API access itself 
 | `GET /work-plans?priority=&status=&engineer_id=&customer=` | Admin, HR, technical team see all; service engineers see plans they're assigned to |
 | `GET /work-plans/{id_or_number}` | As above — e.g. `WP-2026-001` |
 | `POST`/`PATCH`/`DELETE /work-plans...` | Admin, technical team — assign engineers by ID (`ENG-2026-001`); none = draft |
+| `POST /expense-claims` | Logged in — submit your own claim; `amount` or (Travel & Fuel) `distance_km` at `MILEAGE_RATE_PER_KM` |
+| `GET /expense-claims?status=&category=&work_plan=&claimant_id=` | HR and admin see all claims; everyone else sees their own |
+| `POST /expense-claims/{id}/receipt` | Claimant, while pending — PDF/JPEG/PNG/WebP up to `RECEIPT_MAX_MB` (stored in GridFS) |
+| `GET /expense-claims/{id}/receipt` | Claimant, HR, admin |
+| `DELETE /expense-claims/{id}` | Claimant — withdraw a pending claim |
+| `POST /expense-claims/{id}/approve`, `/reject` | HR only (not your own claim); reject needs a `reason` |
 
 ## Local development (API outside Docker)
 

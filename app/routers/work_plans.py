@@ -77,7 +77,7 @@ async def _own_engineer_id(principal: Principal) -> str | None:
     return (user or {}).get("service_engineer", {}).get("engineer_id")
 
 
-async def _visibility(principal: Principal) -> dict:
+async def plan_visibility(principal: Principal) -> dict:
     """Admin, HR and technical team see every plan; service engineers only plans they're assigned to."""
     if principal.roles & _VIEW_ALL:
         return {}
@@ -86,14 +86,14 @@ async def _visibility(principal: Principal) -> dict:
     raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
 
 
-def _lookup(plan_id_or_number: str) -> dict:
+def plan_lookup(plan_id_or_number: str) -> dict:
     if ObjectId.is_valid(plan_id_or_number):
         return {"_id": ObjectId(plan_id_or_number)}
     return {"plan_number": plan_id_or_number.upper()}
 
 
 async def _get(plan_id_or_number: str, extra: dict | None = None) -> dict:
-    doc = await get_db().work_plans.find_one(_lookup(plan_id_or_number) | (extra or {}))
+    doc = await get_db().work_plans.find_one(plan_lookup(plan_id_or_number) | (extra or {}))
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Work plan not found")
     return doc
@@ -124,7 +124,7 @@ async def list_work_plans(
     skip: int = 0,
     limit: int = 100,
 ):
-    query = await _visibility(principal)
+    query = await plan_visibility(principal)
     if priority is not None:
         query["priority"] = priority.value
     if status_ is not None:
@@ -142,7 +142,7 @@ async def list_work_plans(
 @router.get("/{plan_id_or_number}", response_model=WorkPlanOut)
 async def get_work_plan(plan_id_or_number: str, principal: CurrentPrincipal):
     """Look up by id or plan number (e.g. WP-2026-001)."""
-    return (await _out([await _get(plan_id_or_number, await _visibility(principal))]))[0]
+    return (await _out([await _get(plan_id_or_number, await plan_visibility(principal))]))[0]
 
 
 @router.patch("/{plan_id_or_number}", response_model=WorkPlanOut)

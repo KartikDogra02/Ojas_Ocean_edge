@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
 
+    # Expense claims: mileage reimbursement rate (USD per km) and maximum receipt upload size.
+    mileage_rate_per_km: float = 0.42
+    receipt_max_mb: int = 10
+
     # Seeded on startup if the database has no admin user yet. Must change password on first login.
     initial_admin_email: str | None = None
     initial_admin_username: str | None = None
