@@ -3,21 +3,23 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from gridfs import AsyncGridFSBucket
 from gridfs.errors import NoFile
 from pymongo import ReturnDocument
 
-from app.auth import CurrentPrincipal, Principal, require_roles
+from app.auth import CurrentPrincipal, Principal
 from app.config import settings
 from app.db import get_db
 from app.models.common import utcnow
 from app.models.expense_claim import (
+    ClaimAction,
     ExpenseCategory,
     ExpenseClaimCreate,
     ExpenseClaimOut,
     ExpenseStatus,
+    Reimbursement,
     Rejection,
     ReviewDecision,
 )
@@ -26,9 +28,15 @@ from app.routers.work_plans import plan_lookup, plan_visibility
 from app.services import next_sequence
 
 router = APIRouter(prefix="/expense-claims", tags=["expense-claims"])
-HrReviewer = Annotated[Principal, Depends(require_roles(Role.HR_TEAM, detail="Only HR can review expense claims"))]
 
-_VIEW_ALL = {Role.ADMIN.value, Role.HR_TEAM.value}
+# Approvers and HR see every claim; everyone else only their own.
+_VIEW_ALL = {Role.ADMIN.value, Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value, Role.OWNER.value}
+# The claim status each role acts on.
+_ACTS_ON = {
+    Role.TECHNICAL_TEAM.value: ExpenseStatus.PENDING,
+    Role.OWNER.value: ExpenseStatus.TECHNICAL_APPROVED,
+    Role.HR_TEAM.value: ExpenseStatus.OWNER_APPROVED,
+}
 
 # Accepted receipt types, recognised by their first bytes rather than the uploaded name or header.
 _SIGNATURES = [
@@ -123,7 +131,7 @@ async def submit_expense_claim(body: ExpenseClaimCreate, principal: CurrentPrinc
         "description": body.description,
         "receipt": None,
         "status": ExpenseStatus.PENDING.value,
-        "review": None,
+        "history": [],
         "created_at": now,
         "updated_at": now,
     }
@@ -138,10 +146,14 @@ async def list_expense_claims(
     category: ExpenseCategory | None = None,
     claimant_id: Annotated[str | None, Query(description="HR/admin: one person's claims")] = None,
     work_plan: Annotated[str | None, Query(description="Work plan number, e.g. WP-2026-001")] = None,
+    awaiting_my_action: bool = False,
     skip: int = 0,
     limit: int = 100,
 ):
-    """HR and admin see every claim; everyone else sees their own."""
+    """Admin, HR, technical team and owner see every claim; everyone else sees their own.
+
+    `awaiting_my_action=true` lists the claims waiting for you (others' claims at your stage).
+    """
     query: dict = {}
     if not principal.roles & _VIEW_ALL:
         query["claimant.user_id"] = principal.user_id
@@ -153,6 +165,13 @@ async def list_expense_claims(
         query["category"] = category.value
     if work_plan is not None:
         query["work_plan.plan_number"] = work_plan.upper()
+    if awaiting_my_action:
+        statuses = [_ACTS_ON[r].value for r in principal.roles if r in _ACTS_ON]
+        if status_ is not None:
+            statuses = [s for s in statuses if s == status_.value]
+        query["status"] = {"$in": statuses}
+        query["claimant.user_id"] = {"$ne": principal.user_id}
+        query["history.user_id"] = {"$ne": principal.user_id}
     cursor = get_db().expense_claims.find(query).sort("created_at", -1).skip(skip).limit(limit)
     return [_out(d) async for d in cursor]
 
@@ -228,38 +247,113 @@ async def download_receipt(claim_id_or_number: str, principal: CurrentPrincipal)
     )
 
 
-# ---- HR review ----
+# ---- Approval workflow ----
+
+# Who acts at each stage, and the status their approval moves the claim to.
+_APPROVAL_STAGES: dict[ExpenseStatus, tuple[Role, ExpenseStatus]] = {
+    ExpenseStatus.PENDING: (Role.TECHNICAL_TEAM, ExpenseStatus.TECHNICAL_APPROVED),
+    ExpenseStatus.TECHNICAL_APPROVED: (Role.OWNER, ExpenseStatus.OWNER_APPROVED),
+}
 
 
-async def _review(claim_id_or_number: str, reviewer: Principal, decision: ExpenseStatus, note: str | None) -> dict:
-    claim = await get_db().expense_claims.find_one(_lookup(claim_id_or_number), {"claimant": 1, "status": 1})
+async def _act(
+    claim_id_or_number: str,
+    principal: Principal,
+    *,
+    required_role: Role | None,
+    from_status: ExpenseStatus | None = None,
+    action: ClaimAction,
+    new_status: ExpenseStatus | None,
+    note: str | None = None,
+    payment_reference: str | None = None,
+) -> dict:
+    claim = await get_db().expense_claims.find_one(
+        _lookup(claim_id_or_number), {"claimant": 1, "status": 1, "history": 1}
+    )
     if claim is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Expense claim not found")
-    if claim["claimant"]["user_id"] == reviewer.user_id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can't review your own expense claim")
+    current = ExpenseStatus(claim["status"])
+    if from_status is not None and current != from_status:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Claim is {current}; it must be {from_status} to be {action}")
+    stage_role = required_role or _APPROVAL_STAGES.get(current, (None,))[0]
+    if stage_role is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Claim is {current} and can't be {action}")
+    if new_status is None:  # approving: move to the next stage
+        new_status = _APPROVAL_STAGES[current][1]
+    if stage_role.value not in principal.roles:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"Claim is {current}: waiting for {stage_role.label}")
+    if claim["claimant"]["user_id"] == principal.user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can't act on your own expense claim")
+    if any(e["user_id"] == principal.user_id for e in claim.get("history", [])):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You've already acted on this claim at an earlier stage")
+
     now = utcnow()
-    # Only a pending claim can be decided, and only once, even if two reviewers act at the same time.
+    event = {
+        "action": action.value,
+        "user_id": principal.user_id,
+        "by": principal.username,
+        "role": stage_role.value,
+        "at": now,
+        "note": note,
+        "payment_reference": payment_reference,
+    }
+    # Conditional on the status we checked, so two people acting at once can't both succeed.
     doc = await get_db().expense_claims.find_one_and_update(
-        {"_id": claim["_id"], "status": ExpenseStatus.PENDING.value},
-        {
-            "$set": {
-                "status": decision.value,
-                "review": {"reviewed_by": reviewer.username, "reviewed_at": now, "note": note},
-                "updated_at": now,
-            }
-        },
+        {"_id": claim["_id"], "status": current.value},
+        {"$set": {"status": new_status.value, "updated_at": now}, "$push": {"history": event}},
         return_document=ReturnDocument.AFTER,
     )
     if doc is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"Claim has already been {claim['status']}")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Claim was updated by someone else; reload and try again")
     return doc
 
 
 @router.post("/{claim_id_or_number}/approve", response_model=ExpenseClaimOut)
-async def approve_expense_claim(claim_id_or_number: str, reviewer: HrReviewer, body: ReviewDecision | None = None):
-    return _out(await _review(claim_id_or_number, reviewer, ExpenseStatus.APPROVED, body.note if body else None))
+async def approve_expense_claim(
+    claim_id_or_number: str, principal: CurrentPrincipal, body: ReviewDecision | None = None
+):
+    """Technical team approves a pending claim; the owner then gives final approval."""
+    return _out(
+        await _act(
+            claim_id_or_number,
+            principal,
+            required_role=None,
+            action=ClaimAction.APPROVED,
+            new_status=None,
+            note=body.note if body else None,
+        )
+    )
 
 
 @router.post("/{claim_id_or_number}/reject", response_model=ExpenseClaimOut)
-async def reject_expense_claim(claim_id_or_number: str, body: Rejection, reviewer: HrReviewer):
-    return _out(await _review(claim_id_or_number, reviewer, ExpenseStatus.REJECTED, body.reason))
+async def reject_expense_claim(claim_id_or_number: str, body: Rejection, principal: CurrentPrincipal):
+    """Whoever is due to approve the claim (technical team, then owner) can reject it instead."""
+    return _out(
+        await _act(
+            claim_id_or_number,
+            principal,
+            required_role=None,
+            action=ClaimAction.REJECTED,
+            new_status=ExpenseStatus.REJECTED,
+            note=body.reason,
+        )
+    )
+
+
+@router.post("/{claim_id_or_number}/reimburse", response_model=ExpenseClaimOut)
+async def reimburse_expense_claim(
+    claim_id_or_number: str, principal: CurrentPrincipal, body: Reimbursement | None = None
+):
+    """HR marks an owner-approved claim as reimbursed."""
+    return _out(
+        await _act(
+            claim_id_or_number,
+            principal,
+            required_role=Role.HR_TEAM,
+            from_status=ExpenseStatus.OWNER_APPROVED,
+            action=ClaimAction.REIMBURSED,
+            new_status=ExpenseStatus.REIMBURSED,
+            note=body.note if body else None,
+            payment_reference=body.payment_reference if body else None,
+        )
+    )
