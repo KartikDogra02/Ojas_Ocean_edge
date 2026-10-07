@@ -18,9 +18,22 @@ class ExpenseCategory(LabeledEnum):
 
 
 class ExpenseStatus(StrEnum):
+    """pending -> technical_approved (technical team) -> owner_approved (owner) -> reimbursed (HR).
+
+    The technical team or the owner can reject at their stage instead.
+    """
+
     PENDING = "pending"
+    TECHNICAL_APPROVED = "technical_approved"
+    OWNER_APPROVED = "owner_approved"
+    REIMBURSED = "reimbursed"
+    REJECTED = "rejected"
+
+
+class ClaimAction(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
+    REIMBURSED = "reimbursed"
 
 
 class ExpenseClaimCreate(StrictModel):
@@ -49,6 +62,11 @@ class Rejection(StrictModel):
     reason: str = Field(min_length=1, max_length=1000)
 
 
+class Reimbursement(StrictModel):
+    payment_reference: str | None = Field(default=None, max_length=100)  # e.g. bank transfer ID
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class Claimant(BaseModel):
     user_id: str
     username: str
@@ -67,10 +85,13 @@ class Receipt(BaseModel):
     size: int
 
 
-class Review(BaseModel):
-    reviewed_by: str
-    reviewed_at: datetime
+class ClaimEvent(BaseModel):
+    action: ClaimAction
+    by: str  # username
+    role: str  # the role they acted as, e.g. technical_team
+    at: datetime
     note: str | None = None
+    payment_reference: str | None = None
 
 
 class ExpenseClaimOut(BaseModel):
@@ -88,6 +109,6 @@ class ExpenseClaimOut(BaseModel):
     description: str
     receipt: Receipt | None = None
     status: ExpenseStatus
-    review: Review | None = None
+    history: list[ClaimEvent] = []
     created_at: datetime
     updated_at: datetime

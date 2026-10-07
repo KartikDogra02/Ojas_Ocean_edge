@@ -29,7 +29,7 @@ Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated ex
 
 ## Roles
 
-The four built-in system roles are created on startup and can't be deleted or renamed:
+The five built-in system roles are created on startup and can't be deleted or renamed:
 
 | Role | Can |
 |---|---|
@@ -37,9 +37,13 @@ The four built-in system roles are created on startup and can't be deleted or re
 | `hr_team` | View service engineers and roles |
 | `technical_team` | Basic access |
 | `service_engineer` | Basic access, view own profile (`GET /users/me`) |
+| `owner` | Final approval of expense claims |
 
 Admins can add custom roles (e.g. `sonar_specialist`) via `/roles` and assign them to users. Custom roles control
 which frontend menus a user sees (via the permission matrix); API access itself is governed by the system roles.
+
+Expense claims go `pending` → `technical_approved` → `owner_approved` → `reimbursed` (or `rejected` by the
+technical team or owner at their stage). Nobody can act on their own claim, or act on the same claim twice.
 
 ## Main endpoints
 
@@ -72,11 +76,12 @@ which frontend menus a user sees (via the permission matrix); API access itself 
 | `GET /work-plans/{id_or_number}` | As above — e.g. `WP-2026-001` |
 | `POST`/`PATCH`/`DELETE /work-plans...` | Admin, technical team — assign engineers by ID (`ENG-2026-001`); none = draft |
 | `POST /expense-claims` | Logged in — submit your own claim; `amount` or (Travel & Fuel) `distance_km` at `MILEAGE_RATE_PER_KM` |
-| `GET /expense-claims?status=&category=&work_plan=&claimant_id=` | HR and admin see all claims; everyone else sees their own |
+| `GET /expense-claims?status=&category=&work_plan=&claimant_id=&awaiting_my_action=` | Admin, HR, technical team and owner see all claims; everyone else sees their own |
 | `POST /expense-claims/{id}/receipt` | Claimant, while pending — PDF/JPEG/PNG/WebP up to `RECEIPT_MAX_MB` (stored in GridFS) |
 | `GET /expense-claims/{id}/receipt` | Claimant, HR, admin |
 | `DELETE /expense-claims/{id}` | Claimant — withdraw a pending claim |
-| `POST /expense-claims/{id}/approve`, `/reject` | HR only (not your own claim); reject needs a `reason` |
+| `POST /expense-claims/{id}/approve`, `/reject` | Technical team (pending), then owner (technical-approved); reject needs a `reason` |
+| `POST /expense-claims/{id}/reimburse` | HR, once the owner has approved — optional `payment_reference` |
 
 ## Local development (API outside Docker)
 
