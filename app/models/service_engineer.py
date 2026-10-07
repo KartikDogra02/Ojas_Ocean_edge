@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Annotated
 
-from pydantic import ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.common import Password, StrictModel, Username
 from app.models.territory import Territory
@@ -48,10 +49,20 @@ class ServiceEngineerProfileUpdate(StrictModel):
     _split = field_validator("skills", mode="before")(_split_skills)
 
 
+class SignatureInfo(BaseModel):
+    content_type: str = "image/png"
+    size: int
+    width: int
+    height: int
+    uploaded_at: datetime
+
+
 class ServiceEngineerProfileOut(ServiceEngineerProfile):
     model_config = ConfigDict(extra="ignore")
 
     engineer_id: str
+    # Present once a signature PNG has been uploaded; fetch the image from /service-engineers/{id}/signature.
+    signature: SignatureInfo | None = None
 
 
 class ServiceEngineerCreate(ServiceEngineerProfile):

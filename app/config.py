@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
 
+    # Maximum size of a service engineer's signature PNG.
+    signature_max_kb: int = 1024
+
     # Seeded on startup if the database has no admin user yet. Must change password on first login.
     initial_admin_email: str | None = None
     initial_admin_username: str | None = None
