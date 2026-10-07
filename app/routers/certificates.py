@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth import Principal, require_roles
 from app.db import get_db
-from app.models.certificate import CertificateCreate, CertificateOut, InstrumentType, Verdict
+from app.models.certificate import CertificateCreate, CertificateOut, InstrumentType, TestPoint, Verdict
 from app.models.common import utcnow
 from app.models.role import Role
 from app.routers.common import from_doc, to_oid
@@ -19,6 +19,23 @@ admin_only = [Depends(require_roles(Role.ADMIN))]
 
 def _to_mongo(value: date) -> datetime:
     return datetime.combine(value, time(), UTC)
+
+
+def _evaluate(point: TestPoint) -> dict:
+    """Deviation (observed - nominal) in exact decimal arithmetic, and pass/fail against the tolerance."""
+    deviation = point.observed_value - point.nominal_value
+    status_ = None
+    if point.tolerance is not None:
+        status_ = Verdict.PASS.value if abs(deviation) <= point.tolerance else Verdict.FAIL.value
+    return {
+        "parameter": point.parameter,
+        "nominal_value": float(point.nominal_value),
+        "observed_value": float(point.observed_value),
+        "deviation": float(deviation),
+        "unit": point.unit,
+        "tolerance": float(point.tolerance) if point.tolerance is not None else None,
+        "status": status_,
+    }
 
 
 def _out(doc: dict) -> CertificateOut:
@@ -47,8 +64,17 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
             f"Reference standard(s) past their calibration due date: {', '.join(expired)}",
         )
 
+    test_points = [_evaluate(p) for p in body.test_points]
+    failed = [p["parameter"] or f"#{i}" for i, p in enumerate(test_points, 1) if p["status"] == Verdict.FAIL]
+    if failed and body.result == Verdict.PASS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Result can't be pass: test point(s) out of tolerance: {', '.join(failed)}",
+        )
+
     snapshot_fields = ("name", "make", "model", "serial_number", "master_cert_number", "due_date")
-    doc = body.model_dump(exclude={"reference_standard_ids", "calibration_date"}) | {
+    doc = body.model_dump(exclude={"reference_standard_ids", "calibration_date", "test_points"}) | {
+        "test_points": test_points,
         "certificate_number": await next_sequence("certificate", "CAL"),
         "calibration_date": _to_mongo(calibration_date),
         "reference_standard_ids": ids,
