@@ -63,7 +63,7 @@ which frontend menus a user sees (via the permission matrix); API access itself 
 | `PATCH`/`DELETE /reference-standards/{id}` | Admin, technical team — can't delete a standard used by a certificate |
 | `GET /certificates?customer=&serial_number=&instrument_type=&result=&reference_standard_id=` | Logged in |
 | `GET /certificates/{id_or_number}` | Logged in — e.g. `CAL-2026-001` |
-| `POST /certificates` | Technical team, service engineers — auto-numbered; standards must be in calibration |
+| `POST /certificates` | Technical team, service engineers — auto-numbered; standards must be in calibration; `test_points` take nominal/observed values (deviation and pass/fail are calculated) |
 | `DELETE /certificates/{id}` | Admin |
 | `GET /work-plans?priority=&status=&engineer_id=&customer=` | Admin, HR, technical team see all; service engineers see plans they're assigned to |
 | `GET /work-plans/{id_or_number}` | As above — e.g. `WP-2026-001` |

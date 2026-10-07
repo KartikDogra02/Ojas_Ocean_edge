@@ -1,7 +1,8 @@
 from datetime import date, datetime
+from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.common import LabeledEnum, StrictModel
 from app.models.reference_standard import Code, Text
@@ -22,9 +23,24 @@ class Verdict(StrEnum):
 
 
 class TestPoint(StrictModel):
-    reference_value: float
-    measured_value: float
+    """One row of the calibration measurements table. Deviation and status are calculated by the server."""
+
+    parameter: str | None = Field(default=None, max_length=100)  # e.g. "Setpoint 100 bar"
+    nominal_value: Decimal
+    observed_value: Decimal
     unit: str | None = Field(default=None, max_length=20)
+    # Allowed deviation either side of nominal (e.g. 0.05 for ±0.05). Without it the row has no pass/fail status.
+    tolerance: Decimal | None = Field(default=None, ge=0)
+
+
+class TestPointResult(BaseModel):
+    parameter: str | None = None
+    nominal_value: float
+    observed_value: float
+    deviation: float  # observed - nominal
+    unit: str | None = None
+    tolerance: float | None = None
+    status: Verdict | None = None  # pass when |deviation| <= tolerance
 
 
 class CertificateCreate(StrictModel):
@@ -63,6 +79,6 @@ class CertificateOut(StrictModel):
     result: Verdict
     calibration_date: date
     reference_standards: list[ReferenceStandardSnapshot]
-    test_points: list[TestPoint] = []
+    test_points: list[TestPointResult] = []
     issued_by: str
     created_at: datetime
