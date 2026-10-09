@@ -39,6 +39,7 @@ class Customer(StrictModel):
 class WorkPlanCreate(StrictModel):
     title: str = Field(min_length=1, max_length=200)
     priority: Priority = Priority.MEDIUM
+    estimated_duration_hours: float | None = Field(default=None, gt=0, le=1000)
     customer: Customer
     # Engineer IDs such as ENG-2026-101. Leave empty to save as a draft and assign later.
     assigned_engineer_ids: list[EngineerId] = Field(default_factory=list, max_length=50)
@@ -47,6 +48,8 @@ class WorkPlanCreate(StrictModel):
 class WorkPlanUpdate(StrictModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     priority: Priority | None = None
+    # null clears it
+    estimated_duration_hours: float | None = Field(default=None, gt=0, le=1000)
     customer: Customer | None = None
     # Replaces the whole crew; [] unassigns everyone.
     assigned_engineer_ids: list[EngineerId] | None = Field(default=None, max_length=50)
@@ -67,6 +70,7 @@ class WorkPlanOut(StrictModel):
     plan_number: str
     title: str
     priority: Priority
+    estimated_duration_hours: float | None = None
     status: WorkPlanStatus
     customer: Customer
     assigned_engineers: list[AssignedEngineer]
