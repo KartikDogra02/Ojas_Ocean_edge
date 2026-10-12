@@ -8,4 +8,5 @@ dependencies = [
     "pydantic-settings>=2.6",
     "pwdlib[argon2]>=0.2",
     "pyjwt>=2.9",
+    "boto3>=1.43.111",
 ]

@@ -20,10 +20,12 @@ from app.routers import (
     work_plans,
 )
 from app.services import seed_initial_admin, seed_system_roles
+from app.storage import get_storage
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await get_storage().check()
     await db.connect()
     await seed_system_roles()
     await seed_initial_admin()
