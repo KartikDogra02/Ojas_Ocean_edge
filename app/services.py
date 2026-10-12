@@ -60,16 +60,27 @@ async def seed_system_roles() -> None:
             )
 
 
-async def next_sequence(counter: str, prefix: str) -> str:
-    """Allocate the next sequential number, e.g. ENG-2026-106. Numbering restarts each year."""
-    year = utcnow().year
+async def next_sequence(counter: str, prefix: str, *, monthly: bool = False, digits: int | None = None) -> str:
+    """Allocate the next sequential number.
+
+    Yearly (default): ENG-2026-106, restarting each year; padded to 3 digits but may grow beyond.
+    Monthly: CAL-2026-10-0001, restarting each month. With `digits` the number has a fixed width
+    and the period is capped at that many (e.g. 4 digits = 9999 per month).
+    """
+    now = utcnow()
+    period = f"{now.year}-{now.month:02d}" if monthly else f"{now.year}"
     doc = await get_db().counters.find_one_and_update(
-        {"_id": f"{counter}:{year}"},
+        {"_id": f"{counter}:{period}"},
         {"$inc": {"seq": 1}},
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )
-    return f"{prefix}-{year}-{doc['seq']:03d}"
+    seq = doc["seq"]
+    if digits is not None and seq >= 10**digits:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"{prefix} numbering for {period} is used up ({10**digits - 1} maximum)"
+        )
+    return f"{prefix}-{period}-{seq:0{digits or 3}d}"
 
 
 def duplicate_key_error(exc: DuplicateKeyError) -> HTTPException:

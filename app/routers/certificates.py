@@ -75,7 +75,7 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
     snapshot_fields = ("name", "make", "model", "serial_number", "master_cert_number", "due_date")
     doc = body.model_dump(exclude={"reference_standard_ids", "calibration_date", "test_points"}) | {
         "test_points": test_points,
-        "certificate_number": await next_sequence("certificate", "CAL"),
+        "certificate_number": await next_sequence("certificate", "CAL", monthly=True, digits=4),
         "calibration_date": _to_mongo(calibration_date),
         "reference_standard_ids": ids,
         "reference_standards": [{"id": i} | {f: standards[i][f] for f in snapshot_fields} for i in ids],
@@ -113,7 +113,7 @@ async def list_certificates(
 
 @router.get("/{certificate_id_or_number}", response_model=CertificateOut)
 async def get_certificate(certificate_id_or_number: str):
-    """Look up by id or certificate number (e.g. CAL-2026-001)."""
+    """Look up by id or certificate number (e.g. CAL-2026-10-0001)."""
     key = certificate_id_or_number
     query = {"_id": ObjectId(key)} if ObjectId.is_valid(key) else {"certificate_number": key.upper()}
     doc = await get_db().certificates.find_one(query)
