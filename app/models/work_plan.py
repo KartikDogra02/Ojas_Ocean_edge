@@ -19,6 +19,7 @@ class Priority(LabeledEnum):
 class WorkPlanStatus(StrEnum):
     DRAFT = "draft"  # no engineers assigned yet
     ASSIGNED = "assigned"
+    CONVERTED = "converted"  # turned into a work order; no longer editable
 
 
 def _upper(v: object) -> object:
@@ -39,7 +40,7 @@ class Customer(StrictModel):
 class WorkPlanCreate(StrictModel):
     title: str = Field(min_length=1, max_length=200)
     priority: Priority = Priority.MEDIUM
-    estimated_duration_hours: float | None = Field(default=None, gt=0, le=1000)
+    estimated_duration_days: float | None = Field(default=None, gt=0, le=365)  # e.g. 0.5 for half a day
     customer: Customer
     # Engineer IDs such as ENG-2026-101. Leave empty to save as a draft and assign later.
     assigned_engineer_ids: list[EngineerId] = Field(default_factory=list, max_length=50)
@@ -49,7 +50,7 @@ class WorkPlanUpdate(StrictModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     priority: Priority | None = None
     # null clears it
-    estimated_duration_hours: float | None = Field(default=None, gt=0, le=1000)
+    estimated_duration_days: float | None = Field(default=None, gt=0, le=365)  # e.g. 0.5 for half a day
     customer: Customer | None = None
     # Replaces the whole crew; [] unassigns everyone.
     assigned_engineer_ids: list[EngineerId] | None = Field(default=None, max_length=50)
@@ -63,6 +64,11 @@ class AssignedEngineer(StrictModel):
     is_active: bool
 
 
+class WorkOrderRef(StrictModel):
+    id: str
+    work_order_number: str
+
+
 class WorkPlanOut(StrictModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -70,8 +76,9 @@ class WorkPlanOut(StrictModel):
     plan_number: str
     title: str
     priority: Priority
-    estimated_duration_hours: float | None = None
+    estimated_duration_days: float | None = None
     status: WorkPlanStatus
+    work_order: WorkOrderRef | None = None
     customer: Customer
     assigned_engineers: list[AssignedEngineer]
     created_by: str

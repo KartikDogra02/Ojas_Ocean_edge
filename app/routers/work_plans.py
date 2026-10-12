@@ -24,7 +24,7 @@ Planner = Annotated[Principal, Depends(require_roles(Role.ADMIN, Role.TECHNICAL_
 _VIEW_ALL = {Role.ADMIN.value, Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value}
 
 
-async def _validate_engineers(engineer_ids: list[str]) -> list[str]:
+async def validate_engineers(engineer_ids: list[str]) -> list[str]:
     """De-duplicate and check every ID belongs to an active service engineer."""
     ids = list(dict.fromkeys(engineer_ids))
     if not ids:
@@ -41,7 +41,7 @@ async def _validate_engineers(engineer_ids: list[str]) -> list[str]:
     return ids
 
 
-async def _engineers_by_id(engineer_ids: set[str]) -> dict[str, AssignedEngineer]:
+async def engineers_by_id(engineer_ids: set[str]) -> dict[str, AssignedEngineer]:
     cursor = get_db().users.find(
         {"service_engineer.engineer_id": {"$in": list(engineer_ids)}},
         {"full_name": 1, "is_active": 1, "service_engineer.engineer_id": 1, "service_engineer.territory": 1},
@@ -58,15 +58,24 @@ async def _engineers_by_id(engineer_ids: set[str]) -> dict[str, AssignedEngineer
     }
 
 
+def _status(doc: dict) -> WorkPlanStatus:
+    if doc.get("work_order"):
+        return WorkPlanStatus.CONVERTED
+    return WorkPlanStatus.ASSIGNED if doc["assigned_engineer_ids"] else WorkPlanStatus.DRAFT
+
+
 async def _out(docs: list[dict]) -> list[WorkPlanOut]:
     """Attach current engineer details (name, territory) to each plan."""
-    engineers = await _engineers_by_id({e for d in docs for e in d["assigned_engineer_ids"]})
+    engineers = await engineers_by_id({e for d in docs for e in d["assigned_engineer_ids"]})
     return [
         WorkPlanOut(
-            **d,
-            id=str(d["_id"]),
-            status=WorkPlanStatus.ASSIGNED if d["assigned_engineer_ids"] else WorkPlanStatus.DRAFT,
-            assigned_engineers=[engineers[e] for e in d["assigned_engineer_ids"] if e in engineers],
+            **d
+            | {
+                "id": str(d["_id"]),
+                "status": _status(d),
+                "work_order": d["work_order"] | {"id": str(d["work_order"]["id"])} if d.get("work_order") else None,
+                "assigned_engineers": [engineers[e] for e in d["assigned_engineer_ids"] if e in engineers],
+            }
         )
         for d in docs
     ]
@@ -101,7 +110,7 @@ async def _get(plan_id_or_number: str, extra: dict | None = None) -> dict:
 
 @router.post("", response_model=WorkPlanOut, status_code=status.HTTP_201_CREATED)
 async def create_work_plan(body: WorkPlanCreate, planner: Planner):
-    engineer_ids = await _validate_engineers(body.assigned_engineer_ids)
+    engineer_ids = await validate_engineers(body.assigned_engineer_ids)
     now = utcnow()
     doc = body.model_dump(mode="json") | {
         "assigned_engineer_ids": engineer_ids,
@@ -128,7 +137,9 @@ async def list_work_plans(
     if priority is not None:
         query["priority"] = priority.value
     if status_ is not None:
-        query["assigned_engineer_ids.0"] = {"$exists": status_ is WorkPlanStatus.ASSIGNED}
+        query["work_order"] = {"$exists": status_ is WorkPlanStatus.CONVERTED}
+        if status_ is not WorkPlanStatus.CONVERTED:
+            query["assigned_engineer_ids.0"] = {"$exists": status_ is WorkPlanStatus.ASSIGNED}
     if engineer_id is not None:
         query.setdefault("assigned_engineer_ids", engineer_id.upper())
         if query["assigned_engineer_ids"] != engineer_id.upper():
@@ -145,23 +156,35 @@ async def get_work_plan(plan_id_or_number: str, principal: CurrentPrincipal):
     return (await _out([await _get(plan_id_or_number, await plan_visibility(principal))]))[0]
 
 
+def _not_converted(plan: dict) -> None:
+    if plan.get("work_order"):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Work plan was converted to work order {plan['work_order']['work_order_number']} and can't be changed",
+        )
+
+
 @router.patch("/{plan_id_or_number}", response_model=WorkPlanOut)
 async def update_work_plan(plan_id_or_number: str, body: WorkPlanUpdate, _: Planner):
     plan = await _get(plan_id_or_number)
+    _not_converted(plan)
     changes = body.model_dump(mode="json", exclude_unset=True)
     for field in ("title", "priority", "customer", "assigned_engineer_ids"):
         if field in changes and changes[field] is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{field} can't be cleared")
     if "assigned_engineer_ids" in changes:
-        changes["assigned_engineer_ids"] = await _validate_engineers(changes["assigned_engineer_ids"])
+        changes["assigned_engineer_ids"] = await validate_engineers(changes["assigned_engineer_ids"])
     changes["updated_at"] = utcnow()
     doc = await get_db().work_plans.find_one_and_update(
-        {"_id": plan["_id"]}, {"$set": changes}, return_document=ReturnDocument.AFTER
+        {"_id": plan["_id"], "work_order": {"$exists": False}}, {"$set": changes}, return_document=ReturnDocument.AFTER
     )
+    if doc is None:
+        _not_converted(await _get(plan_id_or_number))  # converted in the meantime
     return (await _out([doc]))[0]
 
 
 @router.delete("/{plan_id_or_number}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_work_plan(plan_id_or_number: str, _: Planner):
     plan = await _get(plan_id_or_number)
-    await get_db().work_plans.delete_one({"_id": plan["_id"]})
+    _not_converted(plan)
+    await get_db().work_plans.delete_one({"_id": plan["_id"], "work_order": {"$exists": False}})
