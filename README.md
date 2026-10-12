@@ -39,6 +39,20 @@ To use R2:
 Files are always uploaded and checked through the API. They can be downloaded through the API, or with R2 via a
 short-lived direct link (`.../receipt/link`, `.../signature/link`, valid for `FILE_LINK_EXPIRY_SECONDS`).
 
+### Moving existing files
+
+`app/migrate_files.py` copies receipts and signatures into the current backend: legacy GridFS files from before the
+storage layer, and GridFS files when switching to R2. Each copy is read back and checked before the database is
+updated; re-running it skips files already in place. Run it with the target settings in `.env`:
+
+```bash
+docker compose exec api python -m app.migrate_files --dry-run        # show what would be copied
+docker compose exec api python -m app.migrate_files                  # copy (GridFS copies are kept)
+docker compose exec api python -m app.migrate_files --delete-source  # remove GridFS copies once you're happy
+```
+
+It exits with code 1 and lists any file it couldn't copy (for example one already missing from GridFS).
+
 For local testing without R2: `docker compose --profile s3 up -d s3` starts an S3-compatible SeaweedFS server;
 create a bucket in it and set `R2_ENDPOINT=http://s3:8333`.
 
