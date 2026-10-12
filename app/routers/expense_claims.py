@@ -1,12 +1,11 @@
 import re
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
+from uuid import uuid4
 
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
-from gridfs import AsyncGridFSBucket
-from gridfs.errors import NoFile
+from fastapi.responses import Response
 from pymongo import ReturnDocument
 
 from app.auth import CurrentPrincipal, Principal
@@ -24,8 +23,10 @@ from app.models.expense_claim import (
     ReviewDecision,
 )
 from app.models.role import Role
+from app.routers.common import FileLink, file_link
 from app.routers.work_plans import plan_lookup, plan_visibility
 from app.services import next_sequence
+from app.storage import FileNotFound, content_disposition, get_storage
 
 router = APIRouter(prefix="/expense-claims", tags=["expense-claims"])
 
@@ -39,15 +40,12 @@ _ACTS_ON = {
 }
 
 # Accepted receipt types, recognised by their first bytes rather than the uploaded name or header.
+_EXTENSIONS = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 _SIGNATURES = [
     (b"%PDF-", "application/pdf"),
     (b"\xff\xd8\xff", "image/jpeg"),
     (b"\x89PNG\r\n\x1a\n", "image/png"),
 ]
-
-
-def _receipts() -> AsyncGridFSBucket:
-    return AsyncGridFSBucket(get_db(), bucket_name="receipts")
 
 
 def _sniff(data: bytes) -> str | None:
@@ -186,8 +184,8 @@ async def withdraw_expense_claim(claim_id_or_number: str, principal: CurrentPrin
     """The claimant can withdraw a claim while it's still pending."""
     doc = await _own_pending(claim_id_or_number, principal)
     await get_db().expense_claims.delete_one({"_id": doc["_id"]})
-    if doc.get("receipt"):
-        await _receipts().delete(doc["receipt"]["file_id"])
+    if (doc.get("receipt") or {}).get("key"):
+        await get_storage().delete(doc["receipt"]["key"])
 
 
 # ---- Receipt attachment ----
@@ -206,45 +204,50 @@ async def upload_receipt(claim_id_or_number: str, file: UploadFile, principal: C
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Receipt must be a PDF, JPEG, PNG or WebP file")
 
     filename = _safe_filename(file.filename)
-    bucket = _receipts()
-    file_id = await bucket.upload_from_stream(
-        filename, data, metadata={"claim_id": doc["_id"], "content_type": content_type}
-    )
-    receipt = {"file_id": file_id, "filename": filename, "content_type": content_type, "size": len(data)}
+    key = f"receipts/{doc['claim_number']}/{uuid4().hex}{_EXTENSIONS[content_type]}"
+    await get_storage().put(key, data, content_type)
+    receipt = {"key": key, "filename": filename, "content_type": content_type, "size": len(data)}
     updated = await get_db().expense_claims.find_one_and_update(
         {"_id": doc["_id"]},
         {"$set": {"receipt": receipt, "updated_at": utcnow()}},
         return_document=ReturnDocument.AFTER,
     )
-    if doc.get("receipt"):
-        await _receipts().delete(doc["receipt"]["file_id"])
+    if (doc.get("receipt") or {}).get("key"):
+        await get_storage().delete(doc["receipt"]["key"])
     return _out(updated)
+
+
+async def _receipt_of(claim_id_or_number: str, principal: Principal) -> dict:
+    receipt = (await _get(claim_id_or_number, principal)).get("receipt")
+    if not receipt:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No receipt attached")
+    if "key" not in receipt:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Receipt file hasn't been migrated (run python -m app.migrate_files)"
+        )
+    return receipt
 
 
 @router.get("/{claim_id_or_number}/receipt")
 async def download_receipt(claim_id_or_number: str, principal: CurrentPrincipal):
-    doc = await _get(claim_id_or_number, principal)
-    receipt = doc.get("receipt")
-    if not receipt:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No receipt attached")
+    """The receipt file, served through the API (works with the Authorization header)."""
+    receipt = await _receipt_of(claim_id_or_number, principal)
     try:
-        stream = await _receipts().open_download_stream(receipt["file_id"])
-    except NoFile:
+        data = await get_storage().get(receipt["key"])
+    except FileNotFound:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Receipt file is missing")
-
-    async def chunks():
-        while chunk := await stream.readchunk():
-            yield chunk
-
-    return StreamingResponse(
-        chunks(),
+    return Response(
+        data,
         media_type=receipt["content_type"],
-        headers={
-            "Content-Disposition": f'inline; filename="{receipt["filename"]}"',
-            "Content-Length": str(receipt["size"]),
-            "X-Content-Type-Options": "nosniff",
-        },
+        headers={"Content-Disposition": content_disposition(receipt["filename"]), "X-Content-Type-Options": "nosniff"},
     )
+
+
+@router.get("/{claim_id_or_number}/receipt/link", response_model=FileLink)
+async def receipt_link(claim_id_or_number: str, principal: CurrentPrincipal):
+    """A short-lived direct URL to the receipt (R2 only), for opening in a new tab or an <img> tag."""
+    receipt = await _receipt_of(claim_id_or_number, principal)
+    return file_link(receipt["key"], receipt["filename"], receipt["content_type"])
 
 
 # ---- Approval workflow ----
