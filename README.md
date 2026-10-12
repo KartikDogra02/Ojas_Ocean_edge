@@ -69,7 +69,7 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 | `POST /reference-standards` | Technical team, service engineers |
 | `PATCH`/`DELETE /reference-standards/{id}` | Admin, technical team — can't delete a standard used by a certificate |
 | `GET /certificates?customer=&serial_number=&instrument_type=&result=&reference_standard_id=` | Logged in |
-| `GET /certificates/{id_or_number}` | Logged in — e.g. `CAL-2026-001` |
+| `GET /certificates/{id_or_number}` | Logged in — e.g. `CAL-2026-10-0001` (year, month, then up to 9999 a month) |
 | `POST /certificates` | Technical team, service engineers — auto-numbered; standards must be in calibration; `test_points` take nominal/observed values (deviation and pass/fail are calculated) |
 | `DELETE /certificates/{id}` | Admin |
 | `GET /work-plans?priority=&status=&engineer_id=&customer=` | Admin, HR, technical team see all; service engineers see plans they're assigned to |
