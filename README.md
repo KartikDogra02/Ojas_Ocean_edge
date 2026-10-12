@@ -22,6 +22,40 @@ That admin must change their password on first login.
 3. Passwords are temporary by default: any password set by an admin (new users, service engineers, resets) must be
    changed with `POST /auth/change-password` before anything else works (other calls return 403 "Password change required").
 
+## File storage (receipts and signatures)
+
+`STORAGE_BACKEND` chooses where uploaded files live:
+
+- `gridfs` (default): inside MongoDB — nothing else to set up.
+- `r2`: a Cloudflare R2 bucket; MongoDB only stores each file's key.
+
+To use R2:
+
+1. In the Cloudflare dashboard, create a **private** R2 bucket.
+2. Create an R2 API token with **Object Read & Write**, applied to that bucket only.
+3. In `.env` set `STORAGE_BACKEND=r2`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET`,
+   then restart the API. It checks the bucket on startup and refuses to start if it can't reach it.
+
+Files are always uploaded and checked through the API. They can be downloaded through the API, or with R2 via a
+short-lived direct link (`.../receipt/link`, `.../signature/link`, valid for `FILE_LINK_EXPIRY_SECONDS`).
+
+### Moving existing files
+
+`app/migrate_files.py` copies receipts and signatures into the current backend: legacy GridFS files from before the
+storage layer, and GridFS files when switching to R2. Each copy is read back and checked before the database is
+updated; re-running it skips files already in place. Run it with the target settings in `.env`:
+
+```bash
+docker compose exec api python -m app.migrate_files --dry-run        # show what would be copied
+docker compose exec api python -m app.migrate_files                  # copy (GridFS copies are kept)
+docker compose exec api python -m app.migrate_files --delete-source  # remove GridFS copies once you're happy
+```
+
+It exits with code 1 and lists any file it couldn't copy (for example one already missing from GridFS).
+
+For local testing without R2: `docker compose --profile s3 up -d s3` starts an S3-compatible SeaweedFS server;
+create a bucket in it and set `R2_ENDPOINT=http://s3:8333`.
+
 ## CORS
 
 Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated exact origins, e.g.
@@ -55,9 +89,9 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 | `/users` (CRUD) | Admin — the `service_engineer` role is only assigned via `/service-engineers` |
 | `POST /service-engineers` | Admin — auto-allocates an `ENG-<year>-<seq>` ID and optional temporary password |
 | `GET /service-engineers?territory=&skill=&active=` | Admin, HR |
-| `PUT`/`DELETE /service-engineers/{engineer_id}/signature` | Admin — signature PNG only, up to `SIGNATURE_MAX_KB` (stored in GridFS) |
-| `GET /service-engineers/{engineer_id}/signature` | Admin, HR — returns the PNG |
-| `PUT`/`GET`/`DELETE /users/me/signature` | Service engineers — manage your own signature |
+| `PUT`/`DELETE /service-engineers/{engineer_id}/signature` | Admin — signature PNG only, up to `SIGNATURE_MAX_KB` |
+| `GET /service-engineers/{engineer_id}/signature`, `/signature/link` | Admin, HR — the PNG, or a short-lived R2 link |
+| `PUT`/`GET`/`DELETE /users/me/signature`, `GET /users/me/signature/link` | Service engineers — manage your own signature |
 | `GET /options` | Logged in — active roles and territories (value + label) for dropdowns |
 | `GET /roles`, `GET /roles/{id_or_code}` | Admin, HR — with `user_count` |
 | `POST`/`PATCH`/`DELETE /roles...` | Admin — custom roles; system roles can't be renamed, deactivated or deleted |
@@ -77,8 +111,8 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 | `POST`/`PATCH`/`DELETE /work-plans...` | Admin, technical team — assign engineers by ID (`ENG-2026-001`); none = draft |
 | `POST /expense-claims` | Logged in — submit your own claim; `amount` or (Travel & Fuel) `distance_km` at `MILEAGE_RATE_PER_KM` |
 | `GET /expense-claims?status=&category=&work_plan=&claimant_id=&awaiting_my_action=` | Admin, HR, technical team and owner see all claims; everyone else sees their own |
-| `POST /expense-claims/{id}/receipt` | Claimant, while pending — PDF/JPEG/PNG/WebP up to `RECEIPT_MAX_MB` (stored in GridFS) |
-| `GET /expense-claims/{id}/receipt` | Claimant, HR, admin |
+| `POST /expense-claims/{id}/receipt` | Claimant, while pending — PDF/JPEG/PNG/WebP up to `RECEIPT_MAX_MB` |
+| `GET /expense-claims/{id}/receipt`, `/receipt/link` | Claimant and those who can see the claim — file, or a short-lived R2 link |
 | `DELETE /expense-claims/{id}` | Claimant — withdraw a pending claim |
 | `POST /expense-claims/{id}/approve`, `/reject` | Technical team (pending), then owner (technical-approved); reject needs a `reason` |
 | `POST /expense-claims/{id}/reimburse` | HR, once the owner has approved — optional `payment_reference` |

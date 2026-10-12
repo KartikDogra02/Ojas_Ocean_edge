@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +28,17 @@ class Settings(BaseSettings):
     receipt_max_mb: int = 10
     # Maximum size of a service engineer's signature PNG.
     signature_max_kb: int = 1024
+
+    # Where receipts and signatures are stored: "gridfs" (inside MongoDB) or "r2" (Cloudflare R2).
+    storage_backend: Literal["gridfs", "r2"] = "gridfs"
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket: str | None = None
+    # Overrides the endpoint built from the account ID, e.g. a local MinIO server for testing.
+    r2_endpoint: str | None = None
+    # How long a direct file link (presigned URL) stays valid.
+    file_link_expiry_seconds: int = 300
 
     # Seeded on startup if the database has no admin user yet. Must change password on first login.
     initial_admin_email: str | None = None

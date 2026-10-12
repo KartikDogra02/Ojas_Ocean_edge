@@ -1,9 +1,8 @@
 import struct
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, UploadFile, status
 from fastapi.responses import Response
-from gridfs import AsyncGridFSBucket
-from gridfs.errors import NoFile
 
 from app.auth import CurrentPrincipal, Principal
 from app.config import settings
@@ -11,16 +10,13 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.role import Role
 from app.models.service_engineer import SignatureInfo
+from app.routers.common import FileLink, file_link
+from app.storage import FileNotFound, get_storage
 
 router = APIRouter(tags=["signatures"])
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _ENGINEER = {"roles": Role.SERVICE_ENGINEER.value}
-
-
-def _bucket() -> AsyncGridFSBucket:
-    # GridFS is MongoDB's blob storage: the PNG is stored as binary chunks in the same database.
-    return AsyncGridFSBucket(get_db(), bucket_name="signatures")
 
 
 def _png_size(data: bytes) -> tuple[int, int] | None:
@@ -66,17 +62,16 @@ async def _save(user: dict, file: UploadFile) -> SignatureInfo:
         )
 
     engineer_id = user["service_engineer"]["engineer_id"]
-    file_id = await _bucket().upload_from_stream(
-        f"{engineer_id}-signature.png", data, metadata={"user_id": user["_id"], "content_type": "image/png"}
-    )
+    key = f"signatures/{engineer_id}/{uuid4().hex}.png"
+    await get_storage().put(key, data, "image/png")
     info = SignatureInfo(size=len(data), width=dimensions[0], height=dimensions[1], uploaded_at=utcnow())
     await get_db().users.update_one(
         {"_id": user["_id"]},
-        {"$set": {"service_engineer.signature": info.model_dump() | {"file_id": file_id}, "updated_at": utcnow()}},
+        {"$set": {"service_engineer.signature": info.model_dump() | {"key": key}, "updated_at": utcnow()}},
     )
     old = user["service_engineer"].get("signature")
-    if old:
-        await _bucket().delete(old["file_id"])
+    if old and old.get("key"):
+        await get_storage().delete(old["key"])
     return info
 
 
@@ -87,19 +82,33 @@ async def _delete(user: dict) -> None:
     await get_db().users.update_one(
         {"_id": user["_id"]}, {"$unset": {"service_engineer.signature": ""}, "$set": {"updated_at": utcnow()}}
     )
-    await _bucket().delete(old["file_id"])
+    if old.get("key"):
+        await get_storage().delete(old["key"])
 
 
-async def _image(user: dict) -> Response:
+def _signature_of(user: dict) -> dict:
     signature = user["service_engineer"].get("signature")
     if not signature:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No signature uploaded")
+    if "key" not in signature:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Signature file hasn't been migrated (run python -m app.migrate_files)"
+        )
+    return signature
+
+
+def _link(user: dict) -> FileLink:
+    filename = f"{user['service_engineer']['engineer_id']}-signature.png"
+    return file_link(_signature_of(user)["key"], filename, "image/png")
+
+
+async def _image(user: dict) -> Response:
     try:
-        stream = await _bucket().open_download_stream(signature["file_id"])
-    except NoFile:
+        data = await get_storage().get(_signature_of(user)["key"])
+    except FileNotFound:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Signature file is missing")
     return Response(
-        await stream.read(),
+        data,
         media_type="image/png",
         headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )
@@ -122,6 +131,13 @@ async def get_engineer_signature(engineer_id: str, principal: CurrentPrincipal):
     return await _image(await _engineer(engineer_id))
 
 
+@router.get("/service-engineers/{engineer_id}/signature/link", response_model=FileLink)
+async def engineer_signature_link(engineer_id: str, principal: CurrentPrincipal):
+    """Admin and HR: a short-lived direct URL to the signature (R2 only), e.g. for an <img> tag."""
+    _require(principal, Role.ADMIN, Role.HR_TEAM)
+    return _link(await _engineer(engineer_id))
+
+
 @router.delete("/service-engineers/{engineer_id}/signature", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_engineer_signature(engineer_id: str, principal: CurrentPrincipal):
     _require(principal, Role.ADMIN)
@@ -140,6 +156,11 @@ async def upload_my_signature(file: UploadFile, principal: CurrentPrincipal):
 @router.get("/users/me/signature", response_class=Response)
 async def get_my_signature(principal: CurrentPrincipal):
     return await _image(await _self(principal))
+
+
+@router.get("/users/me/signature/link", response_model=FileLink)
+async def my_signature_link(principal: CurrentPrincipal):
+    return _link(await _self(principal))
 
 
 @router.delete("/users/me/signature", status_code=status.HTTP_204_NO_CONTENT)

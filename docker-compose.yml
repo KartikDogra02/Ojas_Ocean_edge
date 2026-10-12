@@ -26,6 +26,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-gridfs}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
@@ -33,5 +39,17 @@ services:
       mongo:
         condition: service_healthy
 
+  # Optional local stand-in for R2 (S3-compatible SeaweedFS): docker compose --profile s3 up -d
+  # Then set STORAGE_BACKEND=r2, R2_ENDPOINT=http://s3:8333, R2_BUCKET=ojas-dev and any R2 keys (not checked locally).
+  s3:
+    image: chrislusf/seaweedfs:latest
+    profiles: ["s3"]
+    command: server -s3 -dir=/data -ip.bind=0.0.0.0
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - s3_data:/data
+
 volumes:
   mongo_data:
+  s3_data:
