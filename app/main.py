@@ -17,6 +17,7 @@ from app.routers import (
     service_engineers,
     signatures,
     users,
+    work_orders,
     work_plans,
 )
 from app.services import seed_initial_admin, seed_system_roles
@@ -55,6 +56,7 @@ app.include_router(signatures.router, dependencies=authenticated)
 app.include_router(reference_standards.router, dependencies=authenticated)
 app.include_router(certificates.router, dependencies=authenticated)
 app.include_router(work_plans.router, dependencies=authenticated)
+app.include_router(work_orders.router, dependencies=authenticated)
 app.include_router(expense_claims.router, dependencies=authenticated)
 app.include_router(auth.router)
 
