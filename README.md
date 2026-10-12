@@ -109,6 +109,10 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 | `GET /work-plans?priority=&status=&engineer_id=&customer=` | Admin, HR, technical team see all; service engineers see plans they're assigned to |
 | `GET /work-plans/{id_or_number}` | As above — e.g. `WP-2026-001` |
 | `POST`/`PATCH`/`DELETE /work-plans...` | Admin, technical team — assign engineers by ID (`ENG-2026-001`); none = draft |
+| `POST /work-plans/{id}/convert` | Technical team only — turns the plan into a dispatched work order (needs `service_type`); the plan is then locked |
+| `POST /work-orders` | Technical team only — create and dispatch directly; at least one engineer, `lead_engineer_id` defaults to the first |
+| `GET /work-orders?priority=&service_type=&engineer_id=&customer=&work_plan=` | Admin, HR, technical team see all; service engineers see work orders they're on |
+| `PATCH`/`DELETE /work-orders/{id_or_number}` | Admin, technical team — deleting a converted work order unlocks its plan |
 | `POST /expense-claims` | Logged in — submit your own claim; `amount` or (Travel & Fuel) `distance_km` at `MILEAGE_RATE_PER_KM` |
 | `GET /expense-claims?status=&category=&work_plan=&claimant_id=&awaiting_my_action=` | Admin, HR, technical team and owner see all claims; everyone else sees their own |
 | `POST /expense-claims/{id}/receipt` | Claimant, while pending — PDF/JPEG/PNG/WebP up to `RECEIPT_MAX_MB` |
