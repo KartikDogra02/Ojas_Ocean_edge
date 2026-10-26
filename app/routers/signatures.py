@@ -19,7 +19,7 @@ _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _ENGINEER = {"roles": Role.SERVICE_ENGINEER.value}
 
 
-def _png_size(data: bytes) -> tuple[int, int] | None:
+def png_dimensions(data: bytes) -> tuple[int, int] | None:
     """Width and height from a PNG's header, or None if the bytes aren't a PNG."""
     if len(data) < 24 or not data.startswith(_PNG_SIGNATURE) or data[12:16] != b"IHDR":
         return None
@@ -55,7 +55,7 @@ async def _save(user: dict, file: UploadFile) -> SignatureInfo:
         raise HTTPException(
             status.HTTP_413_CONTENT_TOO_LARGE, f"Signature must be {settings.signature_max_kb} KB or less"
         )
-    dimensions = _png_size(data)
+    dimensions = png_dimensions(data)
     if dimensions is None:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Signature must be a PNG image (JPG isn't accepted)"
