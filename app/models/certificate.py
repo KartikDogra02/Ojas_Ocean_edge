@@ -53,6 +53,13 @@ class CertificateCreate(StrictModel):
     # Defaults to today.
     calibration_date: date | None = None
     test_points: list[TestPoint] = Field(default_factory=list, max_length=50)
+    # The work order this calibration was done under (id or number, e.g. WO-2026-001), if any.
+    work_order: str | None = None
+
+
+class CertificateWorkOrder(StrictModel):
+    id: str
+    work_order_number: str
 
 
 class ReferenceStandardSnapshot(StrictModel):
@@ -80,5 +87,6 @@ class CertificateOut(StrictModel):
     calibration_date: date
     reference_standards: list[ReferenceStandardSnapshot]
     test_points: list[TestPointResult] = []
+    work_order: CertificateWorkOrder | None = None
     issued_by: str
     created_at: datetime

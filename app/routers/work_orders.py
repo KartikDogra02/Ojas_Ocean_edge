@@ -17,7 +17,7 @@ from app.models.work_order import (
     WorkPlanConversion,
 )
 from app.models.work_plan import Priority
-from app.routers.work_plans import engineers_by_id, plan_lookup, plan_visibility, validate_engineers
+from app.routers.work_plans import engineers_by_id, own_engineer_id, plan_lookup, plan_visibility, validate_engineers
 from app.services import next_sequence
 
 router = APIRouter(tags=["work-orders"])
@@ -48,6 +48,9 @@ async def _out(docs: list[dict]) -> list[WorkOrderOut]:
                 "lead_engineer": engineers.get(d["lead_engineer_id"]),
                 "assigned_engineers": [engineers[e] for e in d["assigned_engineer_ids"] if e in engineers],
                 "work_plan": d["work_plan"] | {"id": str(d["work_plan"]["id"])} if d.get("work_plan") else None,
+                "field_service_report": d["field_service_report"] | {"id": str(d["field_service_report"]["id"])}
+                if d.get("field_service_report")
+                else None,
             }
         )
         for d in docs
@@ -147,11 +150,29 @@ async def convert_work_plan(plan_id_or_number: str, body: WorkPlanConversion, di
     return (await _out([doc]))[0]
 
 
+@router.post("/work-orders/{id_or_number}/start", response_model=WorkOrderOut)
+async def start_work_order(id_or_number: str, principal: CurrentPrincipal):
+    """Mark a dispatched work order as in progress. Any engineer on its crew, or the technical team, can start it."""
+    order = await _get(id_or_number)
+    on_crew = await own_engineer_id(principal) in order["assigned_engineer_ids"]
+    if not on_crew and Role.TECHNICAL_TEAM.value not in principal.roles:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the crew or the technical team can start this work order")
+    doc = await get_db().work_orders.find_one_and_update(
+        {"_id": order["_id"], "status": WorkOrderStatus.DISPATCHED.value},
+        {"$set": {"status": WorkOrderStatus.IN_PROGRESS.value, "started_at": utcnow(), "updated_at": utcnow()}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if doc is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Work order is already {order['status']}")
+    return (await _out([doc]))[0]
+
+
 @router.get("/work-orders", response_model=list[WorkOrderOut])
 async def list_work_orders(
     principal: CurrentPrincipal,
     priority: Priority | None = None,
     service_type: ServiceType | None = None,
+    status_: Annotated[WorkOrderStatus | None, Query(alias="status")] = None,
     engineer_id: str | None = None,
     customer: str | None = None,
     work_plan: Annotated[str | None, Query(description="Work plan number, e.g. WP-2026-001")] = None,
@@ -164,6 +185,8 @@ async def list_work_orders(
         query["priority"] = priority.value
     if service_type is not None:
         query["service_type"] = service_type.value
+    if status_ is not None:
+        query["status"] = status_.value
     if engineer_id is not None:
         query.setdefault("assigned_engineer_ids", engineer_id.upper())
         if query["assigned_engineer_ids"] != engineer_id.upper():

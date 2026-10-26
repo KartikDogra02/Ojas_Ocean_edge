@@ -44,6 +44,8 @@ def _out(doc: dict) -> CertificateOut:
     doc["reference_standards"] = [
         s | {"id": str(s["id"]), "due_date": s["due_date"].date()} for s in doc["reference_standards"]
     ]
+    if doc.get("work_order"):
+        doc["work_order"] = doc["work_order"] | {"id": str(doc["work_order"]["id"])}
     return CertificateOut(**doc)
 
 
@@ -73,7 +75,19 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
         )
 
     snapshot_fields = ("name", "make", "model", "serial_number", "master_cert_number", "due_date")
-    doc = body.model_dump(exclude={"reference_standard_ids", "calibration_date", "test_points"}) | {
+    work_order = None
+    if body.work_order is not None:
+        ref = body.work_order
+        order = await db.work_orders.find_one(
+            {"_id": ObjectId(ref)} if ObjectId.is_valid(ref) else {"work_order_number": ref.upper()},
+            {"work_order_number": 1},
+        )
+        if order is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Work order not found: {ref}")
+        work_order = {"id": order["_id"], "work_order_number": order["work_order_number"]}
+
+    doc = body.model_dump(exclude={"reference_standard_ids", "calibration_date", "test_points", "work_order"}) | {
+        "work_order": work_order,
         "test_points": test_points,
         "certificate_number": await next_sequence("certificate", "CAL", monthly=True, digits=4),
         "calibration_date": _to_mongo(calibration_date),
@@ -93,6 +107,7 @@ async def list_certificates(
     instrument_type: InstrumentType | None = None,
     result: Verdict | None = None,
     reference_standard_id: Annotated[str | None, Query(description="Certificates that used this standard")] = None,
+    work_order: Annotated[str | None, Query(description="Work order number, e.g. WO-2026-001")] = None,
     skip: int = 0,
     limit: int = 100,
 ):
@@ -107,6 +122,8 @@ async def list_certificates(
         query["result"] = result.value
     if reference_standard_id is not None:
         query["reference_standard_ids"] = to_oid(reference_standard_id)
+    if work_order is not None:
+        query["work_order.work_order_number"] = work_order.upper()
     cursor = get_db().certificates.find(query).sort("created_at", -1).skip(skip).limit(limit)
     return [_out(d) async for d in cursor]
 

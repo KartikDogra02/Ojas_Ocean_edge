@@ -81,7 +81,7 @@ async def _out(docs: list[dict]) -> list[WorkPlanOut]:
     ]
 
 
-async def _own_engineer_id(principal: Principal) -> str | None:
+async def own_engineer_id(principal: Principal) -> str | None:
     user = await get_db().users.find_one({"_id": principal.user_id}, {"service_engineer.engineer_id": 1})
     return (user or {}).get("service_engineer", {}).get("engineer_id")
 
@@ -91,7 +91,7 @@ async def plan_visibility(principal: Principal) -> dict:
     if principal.roles & _VIEW_ALL:
         return {}
     if Role.SERVICE_ENGINEER.value in principal.roles:
-        return {"assigned_engineer_ids": await _own_engineer_id(principal)}
+        return {"assigned_engineer_ids": await own_engineer_id(principal)}
     raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
 
 
