@@ -21,6 +21,7 @@ from app.routers import (
     users,
     work_orders,
     work_plans,
+    workflow,
 )
 from app.services import seed_initial_admin, seed_system_roles
 from app.storage import get_storage
@@ -61,6 +62,7 @@ app.include_router(work_plans.router, dependencies=authenticated)
 app.include_router(work_orders.router, dependencies=authenticated)
 app.include_router(fsr.router, dependencies=authenticated)
 app.include_router(check_ins.router, dependencies=authenticated)
+app.include_router(workflow.router, dependencies=authenticated)
 app.include_router(expense_claims.router, dependencies=authenticated)
 app.include_router(auth.router)
 

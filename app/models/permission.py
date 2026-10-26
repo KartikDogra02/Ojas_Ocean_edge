@@ -37,6 +37,9 @@ MENU_ITEMS: list[MenuItem] = [
         ("menu-certificates", "Calibration Certificates", "Calibration", "workspace_premium", "/portal/certificates"),
         ("menu-work-plans", "Work Plans", "Field Coordination", "assignment", "/portal/work-plans"),
         ("menu-work-orders", "Work Orders", "Field Coordination", "engineering", "/portal/work-orders"),
+        ("menu-workflow", "Operations Workflow", "Field Coordination", "account_tree", "/portal/workflow"),
+        ("menu-fsr", "Field Service Reports", "Field Coordination", "assignment_turned_in", "/portal/fsr"),
+        ("menu-check-ins", "Check-ins", "Field Coordination", "where_to_vote", "/portal/check-ins"),
         ("menu-expense-claims", "Expense Claims", "Field Coordination", "receipt_long", "/portal/expense-claims"),
     ]
 ]
@@ -57,6 +60,9 @@ _DEFAULT_ACCESS: dict[str, set[str]] = {
     "menu-certificates": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-work-plans": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-work-orders": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-workflow": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-fsr": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-check-ins": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-expense-claims": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER, Role.OWNER},
 }
 
