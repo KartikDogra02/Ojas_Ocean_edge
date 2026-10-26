@@ -9,6 +9,7 @@ from app.config import settings
 from app.routers import (
     auth,
     certificates,
+    check_ins,
     expense_claims,
     fsr,
     options,
@@ -59,6 +60,7 @@ app.include_router(certificates.router, dependencies=authenticated)
 app.include_router(work_plans.router, dependencies=authenticated)
 app.include_router(work_orders.router, dependencies=authenticated)
 app.include_router(fsr.router, dependencies=authenticated)
+app.include_router(check_ins.router, dependencies=authenticated)
 app.include_router(expense_claims.router, dependencies=authenticated)
 app.include_router(auth.router)
 

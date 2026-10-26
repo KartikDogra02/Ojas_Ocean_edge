@@ -56,5 +56,6 @@ async def ensure_indexes() -> None:
     await db.field_service_reports.create_index("work_order.id", unique=True)  # one FSR per work order
     await db.field_service_reports.create_index("assigned_engineer_ids")
     await db.certificates.create_index("work_order.id")
+    await db.check_ins.create_index([("engineer_id", 1), ("checked_in_at", -1)])
     # Logged-out tokens; Mongo deletes each entry once the token would have expired anyway.
     await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
