@@ -30,10 +30,17 @@ from app.models.planner import (
 from app.models.role import Role
 
 router = APIRouter(prefix="/planner", tags=["planner"])
-Editor = Annotated[Principal, Depends(require_roles(Role.ADMIN, Role.HR_TEAM, Role.TECHNICAL_TEAM))]
+# Only HR and the technical team change the planner.
+Editor = Annotated[
+    Principal,
+    Depends(
+        require_roles(Role.HR_TEAM, Role.TECHNICAL_TEAM, detail="Only HR and the technical team can change the planner")
+    ),
+]
 
-# Everyone else (service engineers) only sees their own row.
-_VIEW_ALL = {Role.ADMIN.value, Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value, Role.OWNER.value}
+# HR and the technical team see every engineer (admin and owner too, read-only).
+# Service engineers only see their own row and can't change it.
+_VIEW_ALL = {Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value, Role.ADMIN.value, Role.OWNER.value}
 _ENGINEER = {"roles": Role.SERVICE_ENGINEER.value, "is_active": True}
 
 
