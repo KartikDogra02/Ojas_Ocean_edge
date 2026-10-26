@@ -12,6 +12,7 @@ from app.routers import (
     expense_claims,
     options,
     permissions,
+    planner,
     reference_standards,
     roles,
     service_engineers,
@@ -57,6 +58,7 @@ app.include_router(reference_standards.router, dependencies=authenticated)
 app.include_router(certificates.router, dependencies=authenticated)
 app.include_router(work_plans.router, dependencies=authenticated)
 app.include_router(work_orders.router, dependencies=authenticated)
+app.include_router(planner.router, dependencies=authenticated)
 app.include_router(expense_claims.router, dependencies=authenticated)
 app.include_router(auth.router)
 
