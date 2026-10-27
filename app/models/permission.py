@@ -37,6 +37,7 @@ MENU_ITEMS: list[MenuItem] = [
         ("menu-certificates", "Calibration Certificates", "Calibration", "workspace_premium", "/portal/certificates"),
         ("menu-work-plans", "Work Plans", "Field Coordination", "assignment", "/portal/work-plans"),
         ("menu-work-orders", "Work Orders", "Field Coordination", "engineering", "/portal/work-orders"),
+        ("menu-planner", "Engineer Planner", "Field Coordination", "calendar_month", "/portal/planner"),
         ("menu-expense-claims", "Expense Claims", "Field Coordination", "receipt_long", "/portal/expense-claims"),
     ]
 ]
@@ -57,6 +58,7 @@ _DEFAULT_ACCESS: dict[str, set[str]] = {
     "menu-certificates": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-work-plans": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-work-orders": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-planner": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER, Role.OWNER},
     "menu-expense-claims": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER, Role.OWNER},
 }
 
