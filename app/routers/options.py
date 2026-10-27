@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.config import settings
 from app.db import get_db
 from app.models.certificate import InstrumentType
+from app.models.check_in import PlaceType
 from app.models.expense_claim import ExpenseCategory
 from app.models.planner import DAY_STATUS_STYLE, DayStatus, MonthStatus
 from app.models.territory import Territory
@@ -24,6 +25,7 @@ async def get_options() -> dict[str, Any]:
         "instrument_types": [{"value": t.value, "label": t.label} for t in InstrumentType],
         "priorities": [{"value": p.value, "label": p.label} for p in Priority],
         "service_types": [{"value": t.value, "label": t.label} for t in ServiceType],
+        "check_in_place_types": [{"value": t.value, "label": t.label} for t in PlaceType],
         "planner_day_statuses": [
             {"value": s.value, "label": s.label, "code": DAY_STATUS_STYLE[s][0], "color": DAY_STATUS_STYLE[s][1]}
             for s in DayStatus

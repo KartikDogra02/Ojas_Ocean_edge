@@ -17,7 +17,11 @@ class ServiceType(LabeledEnum):
 
 
 class WorkOrderStatus(StrEnum):
+    """dispatched -> in_progress (crew starts work) -> completed (Field Service Report submitted)."""
+
     DISPATCHED = "dispatched"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
 
 
 class Equipment(StrictModel):
@@ -70,6 +74,11 @@ class WorkPlanRef(StrictModel):
     plan_number: str
 
 
+class FsrRef(StrictModel):
+    id: str
+    fsr_number: str
+
+
 class WorkOrderOut(StrictModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -86,6 +95,9 @@ class WorkOrderOut(StrictModel):
     equipment: Equipment | None = None
     scope_of_work: str | None = None
     work_plan: WorkPlanRef | None = None  # set when converted from a work plan
+    field_service_report: FsrRef | None = None  # set once the crew submits the FSR (status completed)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_by: str
     created_at: datetime
     updated_at: datetime

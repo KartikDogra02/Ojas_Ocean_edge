@@ -52,6 +52,11 @@ async def ensure_indexes() -> None:
     await db.work_orders.create_index("assigned_engineer_ids")
     await db.work_orders.create_index("customer.company")
     await db.work_orders.create_index("work_plan.id")
+    await db.field_service_reports.create_index("fsr_number", unique=True)
+    await db.field_service_reports.create_index("work_order.id", unique=True)  # one FSR per work order
+    await db.field_service_reports.create_index("assigned_engineer_ids")
+    await db.certificates.create_index("work_order.id")
+    await db.check_ins.create_index([("engineer_id", 1), ("checked_in_at", -1)])
     await db.planner_days.create_index([("engineer_id", 1), ("date", 1)], unique=True)
     await db.planner_days.create_index("date")
     # Planner days are only kept until the day after their date.

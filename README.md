@@ -104,7 +104,7 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 | `PATCH`/`DELETE /reference-standards/{id}` | Admin, technical team — can't delete a standard used by a certificate |
 | `GET /certificates?customer=&serial_number=&instrument_type=&result=&reference_standard_id=` | Logged in |
 | `GET /certificates/{id_or_number}` | Logged in — e.g. `CAL-2026-10-0001` (year, month, then up to 9999 a month) |
-| `POST /certificates` | Technical team, service engineers — auto-numbered; standards must be in calibration; `test_points` take nominal/observed values (deviation and pass/fail are calculated) |
+| `POST /certificates` | Technical team, service engineers — auto-numbered; standards must be in calibration; `test_points` take nominal/observed values (deviation and pass/fail are calculated); optional `work_order` link |
 | `DELETE /certificates/{id}` | Admin |
 | `GET /work-plans?priority=&status=&engineer_id=&customer=` | Admin, HR, technical team see all; service engineers see plans they're assigned to |
 | `GET /work-plans/{id_or_number}` | As above — e.g. `WP-2026-001` |
@@ -113,6 +113,13 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 | `POST /work-orders` | Technical team only — create and dispatch directly; at least one engineer, `lead_engineer_id` defaults to the first |
 | `GET /work-orders?priority=&service_type=&engineer_id=&customer=&work_plan=` | Admin, HR, technical team see all; service engineers see work orders they're on |
 | `PATCH`/`DELETE /work-orders/{id_or_number}` | Admin, technical team — deleting a converted work order unlocks its plan |
+| `POST /work-orders/{id_or_number}/start` | Crew or technical team — dispatched → in progress |
+| `POST /fsr` | Engineers on the work order's crew — Digital Field Service Report; completes the work order (one per work order) |
+| `GET /fsr?work_order=&customer=`, `GET /fsr/{id_or_number}` | Admin, HR, technical team see all; engineers see FSRs for work orders they were on |
+| `GET /fsr/{id}/signature`, `/signature/link` | The client's drawn signature (PNG) |
+| `POST /check-ins` | Service engineers — type where they are (hotel, vessel, airport, workshop, customer site, other) |
+| `GET /check-ins?engineer_id=&place_type=`, `GET /check-ins/latest` | History, and each engineer's latest check-in (where they are now) |
+| `GET /workflow?search=&stage=&priority=` | Each job traced Work Plan → Work Order → Crew → FSR → ISO certificate, with expenses and completion % |
 | `GET /planner/daily` | Today + 13 days per engineer: status, note, work order, availability, daily totals |
 | `PUT /planner/daily` | HR, technical team — bulk set/clear days (today to today+13 only; past days auto-delete) |
 | `GET /planner/weekly?start=` | 7 days with each engineer's work orders (defaults to this week's Monday) |
