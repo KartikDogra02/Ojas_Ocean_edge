@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # How long a direct file link (presigned URL) stays valid.
     file_link_expiry_seconds: int = 300
 
+    # Time zone that decides what "today" is on the engineer planner, e.g. "Europe/London".
+    planner_timezone: str = "UTC"
+    # How many days ahead the daily planner covers, starting today.
+    planner_days: int = 14
+
     # Seeded on startup if the database has no admin user yet. Must change password on first login.
     initial_admin_email: str | None = None
     initial_admin_username: str | None = None

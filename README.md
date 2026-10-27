@@ -120,6 +120,16 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 | `POST /check-ins` | Service engineers — type where they are (hotel, vessel, airport, workshop, customer site, other) |
 | `GET /check-ins?engineer_id=&place_type=`, `GET /check-ins/latest` | History, and each engineer's latest check-in (where they are now) |
 | `GET /workflow?search=&stage=&priority=` | Each job traced Work Plan → Work Order → Crew → FSR → ISO certificate, with expenses and completion % |
+| `GET /planner/daily` | Today + 13 days per engineer: status, note, work order, availability, daily totals |
+| `PUT /planner/daily` | HR, technical team — bulk set/clear days (today to today+13 only; past days auto-delete) |
+| `GET /planner/weekly?start=` | 7 days with each engineer's work orders (defaults to this week's Monday) |
+| `GET /planner/monthly?year=`, `PUT /planner/monthly` | Whole year: month off / on call per engineer (editing: HR, technical team; current year onwards) |
+| `GET /planner/availability` | Which of the next 14 days each engineer is free |
+| `PATCH /planner/engineers/{engineer_id}` | HR, technical team — current country and planner comment |
+
+Planner: HR and the technical team see every engineer and make changes; admin and owner can view everyone
+(read-only); service engineers see only their own row and can't change it.
+`PLANNER_TIMEZONE` (default UTC) decides what "today" is.
 | `POST /expense-claims` | Logged in — submit your own claim; `amount` or (Travel & Fuel) `distance_km` at `MILEAGE_RATE_PER_KM` |
 | `GET /expense-claims?status=&category=&work_plan=&claimant_id=&awaiting_my_action=` | Admin, HR, technical team and owner see all claims; everyone else sees their own |
 | `POST /expense-claims/{id}/receipt` | Claimant, while pending — PDF/JPEG/PNG/WebP up to `RECEIPT_MAX_MB` |

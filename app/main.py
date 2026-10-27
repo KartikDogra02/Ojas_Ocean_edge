@@ -14,6 +14,7 @@ from app.routers import (
     fsr,
     options,
     permissions,
+    planner,
     reference_standards,
     roles,
     service_engineers,
@@ -63,6 +64,7 @@ app.include_router(work_orders.router, dependencies=authenticated)
 app.include_router(fsr.router, dependencies=authenticated)
 app.include_router(check_ins.router, dependencies=authenticated)
 app.include_router(workflow.router, dependencies=authenticated)
+app.include_router(planner.router, dependencies=authenticated)
 app.include_router(expense_claims.router, dependencies=authenticated)
 app.include_router(auth.router)
 

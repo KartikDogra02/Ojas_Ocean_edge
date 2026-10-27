@@ -40,6 +40,7 @@ MENU_ITEMS: list[MenuItem] = [
         ("menu-workflow", "Operations Workflow", "Field Coordination", "account_tree", "/portal/workflow"),
         ("menu-fsr", "Field Service Reports", "Field Coordination", "assignment_turned_in", "/portal/fsr"),
         ("menu-check-ins", "Check-ins", "Field Coordination", "where_to_vote", "/portal/check-ins"),
+        ("menu-planner", "Engineer Planner", "Field Coordination", "calendar_month", "/portal/planner"),
         ("menu-expense-claims", "Expense Claims", "Field Coordination", "receipt_long", "/portal/expense-claims"),
     ]
 ]
@@ -63,6 +64,7 @@ _DEFAULT_ACCESS: dict[str, set[str]] = {
     "menu-workflow": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-fsr": {Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
     "menu-check-ins": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER},
+    "menu-planner": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER, Role.OWNER},
     "menu-expense-claims": {Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER, Role.OWNER},
 }
 
