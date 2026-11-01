@@ -145,6 +145,16 @@ docker compose up -d mongo
 uv run fastapi dev app/main.py
 ```
 
+## Running tests
+
+The tests run the real API against a throwaway database (`ojas_test_<random>`) in the Docker MongoDB, using the
+connection settings in `.env`. Your normal data isn't touched.
+
+```bash
+docker compose up -d mongo
+uv run pytest
+```
+
 ## Admin CLI
 
 Create an extra admin, e.g. to recover access if every admin is locked out:
