@@ -3,11 +3,12 @@ from typing import Annotated, TypeAlias
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pymongo import ReturnDocument
+from pymongo.asynchronous.client_session import AsyncClientSession
 
 from app.audit import changes as audit_changes
 from app.audit import record
 from app.auth import CurrentPrincipal, Principal, require_roles
-from app.db import get_db
+from app.db import get_db, in_transaction
 from app.models.common import utcnow
 from app.models.role import Role
 from app.models.work_order import (
@@ -67,7 +68,9 @@ async def _get(id_or_number: str, extra: dict | None = None) -> dict:
     return doc
 
 
-async def _insert(fields: dict, creator: Principal, work_order_id: ObjectId | None = None) -> dict:
+async def _insert(
+    fields: dict, creator: Principal, work_order_id: ObjectId | None = None, session: AsyncClientSession | None = None
+) -> dict:
     now = utcnow()
     doc = fields | {
         "_id": work_order_id or ObjectId(),
@@ -77,7 +80,7 @@ async def _insert(fields: dict, creator: Principal, work_order_id: ObjectId | No
         "created_at": now,
         "updated_at": now,
     }
-    await get_db().work_orders.insert_one(doc)
+    await get_db().work_orders.insert_one(doc, session=session)
     return doc
 
 
@@ -129,32 +132,34 @@ async def convert_work_plan(plan_id_or_number: str, body: WorkPlanConversion, di
         "work_order_number": await next_sequence("work_order", "WO"),
     }
     work_order_id = ObjectId()
-    # Claim the plan first, so two people converting it at once can't both create a work order.
-    claimed = await db.work_plans.find_one_and_update(
-        {"_id": plan["_id"], "work_order": {"$exists": False}},
-        {
-            "$set": {
-                "work_order": {"id": work_order_id, "work_order_number": fields["work_order_number"]},
-                "updated_at": utcnow(),
-            }
-        },
-    )
-    if claimed is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Work plan was converted by someone else just now")
-    try:
-        doc = await _insert(fields, dispatcher, work_order_id)
-    except Exception:
-        await db.work_plans.update_one({"_id": plan["_id"]}, {"$unset": {"work_order": ""}})
-        raise
-    await record(
-        dispatcher,
-        "convert",
-        "work_order",
-        doc["_id"],
-        doc["work_order_number"],
-        details={"work_plan": plan["plan_number"]},
-    )
-    return (await _out([doc]))[0]
+
+    async def convert(session: AsyncClientSession) -> dict:
+        # Lock the plan, create the work order and log it together; if any step fails, none of it is saved.
+        claimed = await db.work_plans.find_one_and_update(
+            {"_id": plan["_id"], "work_order": {"$exists": False}},
+            {
+                "$set": {
+                    "work_order": {"id": work_order_id, "work_order_number": fields["work_order_number"]},
+                    "updated_at": utcnow(),
+                }
+            },
+            session=session,
+        )
+        if claimed is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Work plan was converted by someone else just now")
+        doc = await _insert(fields, dispatcher, work_order_id, session)
+        await record(
+            dispatcher,
+            "convert",
+            "work_order",
+            doc["_id"],
+            doc["work_order_number"],
+            details={"work_plan": plan["plan_number"]},
+            session=session,
+        )
+        return doc
+
+    return (await _out([await in_transaction(convert)]))[0]
 
 
 @router.post("/work-orders/{id_or_number}/start", response_model=WorkOrderOut)
@@ -246,9 +251,16 @@ async def update_work_order(id_or_number: str, body: WorkOrderUpdate, editor: Ed
 async def delete_work_order(id_or_number: str, editor: Editor):
     """Delete a work order. If it came from a work plan, the plan is unlocked again."""
     order = await _get(id_or_number)
-    await get_db().work_orders.delete_one({"_id": order["_id"]})
-    await record(editor, "delete", "work_order", order["_id"], order["work_order_number"])
-    if order.get("work_plan"):
-        await get_db().work_plans.update_one(
-            {"_id": order["work_plan"]["id"]}, {"$unset": {"work_order": ""}, "$set": {"updated_at": utcnow()}}
-        )
+    db = get_db()
+
+    async def delete(session: AsyncClientSession) -> None:
+        await db.work_orders.delete_one({"_id": order["_id"]}, session=session)
+        if order.get("work_plan"):
+            await db.work_plans.update_one(
+                {"_id": order["work_plan"]["id"]},
+                {"$unset": {"work_order": ""}, "$set": {"updated_at": utcnow()}},
+                session=session,
+            )
+        await record(editor, "delete", "work_order", order["_id"], order["work_order_number"], session=session)
+
+    await in_transaction(delete)

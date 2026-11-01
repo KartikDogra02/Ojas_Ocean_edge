@@ -4,11 +4,12 @@ import binascii
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import Response
+from pymongo.asynchronous.client_session import AsyncClientSession
 
 from app.audit import record
 from app.auth import CurrentPrincipal
 from app.config import settings
-from app.db import get_db
+from app.db import get_db, in_transaction
 from app.models.common import utcnow
 from app.models.fsr import FsrCreate, FsrOut
 from app.models.work_order import WorkOrderStatus
@@ -86,78 +87,83 @@ async def submit_fsr(body: FsrCreate, principal: CurrentPrincipal):
     signature = _decode_signature(body.client_signature) if body.client_signature else None
 
     fsr_id, fsr_number, now = ObjectId(), await next_sequence("fsr", "FSR"), utcnow()
-    # Close the work order first, conditionally, so two engineers submitting at once can't both succeed.
-    claimed = await db.work_orders.find_one_and_update(
-        {"_id": order["_id"], "status": {"$in": _OPEN}, "field_service_report": None},
-        {
-            "$set": {
-                "status": WorkOrderStatus.COMPLETED.value,
-                "completed_at": now,
-                "updated_at": now,
-                "field_service_report": {"id": fsr_id, "fsr_number": fsr_number},
-            }
+    user = require_found(
+        await db.users.find_one({"_id": principal.user_id}, {"username": 1, "full_name": 1}), "User not found"
+    )
+    parts = [
+        {"name": p.name, "quantity": p.quantity, "unit_cost_cents": int(p.unit_cost * 100)} for p in body.spare_parts
+    ]
+    doc = {
+        "_id": fsr_id,
+        "fsr_number": fsr_number,
+        "work_order": {
+            "id": order["_id"],
+            "work_order_number": order["work_order_number"],
+            "title": order["title"],
+            "customer": order["customer"]["company"],
+            "site_address": order["customer"].get("site_address"),
+            "equipment": order.get("equipment"),
         },
-    )
-    if claimed is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Work order was completed by someone else just now")
+        # Same field as work orders, so the crew keeps access to the report.
+        "assigned_engineer_ids": order["assigned_engineer_ids"],
+        "initial_condition": body.initial_condition or order.get("scope_of_work"),
+        "root_cause": body.root_cause,
+        "corrective_action": body.corrective_action,
+        "spare_parts": parts,
+        "parts_total_cents": sum(p.quantity * int(p.unit_cost * 100) for p in body.spare_parts),
+        "customer_rep_name": body.customer_rep_name,
+        "customer_rep_designation": body.customer_rep_designation,
+        "customer_satisfaction": body.customer_satisfaction,
+        "client_signature": None,
+        "submitted_by": {
+            "user_id": principal.user_id,
+            "username": user["username"],
+            "engineer_id": engineer_id,
+            "full_name": user.get("full_name"),
+        },
+        "submitted_at": now,
+    }
+    # Files can't be part of a transaction, so the signature is stored first and removed if saving fails.
+    if signature:
+        data, width, height = signature
+        key = f"fsr/{fsr_number}/client-signature.png"
+        await get_storage().put(key, data, "image/png")
+        doc["client_signature"] = {"key": key, "size": len(data), "width": width, "height": height}
 
-    signature_doc = None
+    async def submit(session: AsyncClientSession) -> None:
+        # Complete the work order (only if still open, so two engineers can't both submit), save the report
+        # and log it together; if any step fails, the work order stays open.
+        claimed = await db.work_orders.find_one_and_update(
+            {"_id": order["_id"], "status": {"$in": _OPEN}, "field_service_report": None},
+            {
+                "$set": {
+                    "status": WorkOrderStatus.COMPLETED.value,
+                    "completed_at": now,
+                    "updated_at": now,
+                    "field_service_report": {"id": fsr_id, "fsr_number": fsr_number},
+                }
+            },
+            session=session,
+        )
+        if claimed is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Work order was completed by someone else just now")
+        await db.field_service_reports.insert_one(doc, session=session)
+        await record(
+            principal,
+            "submit",
+            "fsr",
+            fsr_id,
+            fsr_number,
+            details={"work_order": order["work_order_number"]},
+            session=session,
+        )
+
     try:
-        if signature:
-            data, width, height = signature
-            key = f"fsr/{fsr_number}/client-signature.png"
-            await get_storage().put(key, data, "image/png")
-            signature_doc = {"key": key, "size": len(data), "width": width, "height": height}
-        parts = [
-            {"name": p.name, "quantity": p.quantity, "unit_cost_cents": int(p.unit_cost * 100)}
-            for p in body.spare_parts
-        ]
-        user = require_found(
-            await db.users.find_one({"_id": principal.user_id}, {"username": 1, "full_name": 1}), "User not found"
-        )
-        doc = {
-            "_id": fsr_id,
-            "fsr_number": fsr_number,
-            "work_order": {
-                "id": order["_id"],
-                "work_order_number": order["work_order_number"],
-                "title": order["title"],
-                "customer": order["customer"]["company"],
-                "site_address": order["customer"].get("site_address"),
-                "equipment": order.get("equipment"),
-            },
-            # Same field as work orders, so the crew keeps access to the report.
-            "assigned_engineer_ids": order["assigned_engineer_ids"],
-            "initial_condition": body.initial_condition or order.get("scope_of_work"),
-            "root_cause": body.root_cause,
-            "corrective_action": body.corrective_action,
-            "spare_parts": parts,
-            "parts_total_cents": sum(p.quantity * int(p.unit_cost * 100) for p in body.spare_parts),
-            "customer_rep_name": body.customer_rep_name,
-            "customer_rep_designation": body.customer_rep_designation,
-            "customer_satisfaction": body.customer_satisfaction,
-            "client_signature": signature_doc,
-            "submitted_by": {
-                "user_id": principal.user_id,
-                "username": user["username"],
-                "engineer_id": engineer_id,
-                "full_name": user.get("full_name"),
-            },
-            "submitted_at": now,
-        }
-        await db.field_service_reports.insert_one(doc)
+        await in_transaction(submit)
     except Exception:
-        if signature_doc:
-            await get_storage().delete(signature_doc["key"])
-        # Reopen the work order so the report can be submitted again.
-        await db.work_orders.update_one(
-            {"_id": order["_id"]},
-            {"$set": {"status": order["status"], "field_service_report": None}, "$unset": {"completed_at": ""}},
-        )
+        if doc["client_signature"]:
+            await get_storage().delete(doc["client_signature"]["key"])
         raise
-    await record(
-        principal, "submit", "fsr", doc["_id"], doc["fsr_number"], details={"work_order": order["work_order_number"]}
-    )
     return _out(doc)
 
 

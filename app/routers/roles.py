@@ -1,12 +1,13 @@
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pymongo import ReturnDocument
+from pymongo.asynchronous.client_session import AsyncClientSession
 from pymongo.errors import DuplicateKeyError
 
 from app.audit import changes as changes_of
 from app.audit import record
 from app.auth import CurrentPrincipal, require_roles
-from app.db import get_db
+from app.db import get_db, in_transaction
 from app.models.common import utcnow
 from app.models.permission import default_menu_permissions
 from app.models.role import Role, RoleCreate, RoleOut, RoleUpdate
@@ -110,7 +111,11 @@ async def delete_role(role_id_or_code: str, actor: CurrentPrincipal):
             status.HTTP_400_BAD_REQUEST,
             f"Cannot delete role assigned to {active_users} active user(s). Reassign users first.",
         )
-    # Inactive users may still hold the role; remove it from them too.
-    await db.users.update_many({"roles": role["code"]}, {"$pull": {"roles": role["code"]}})
-    await db.roles.delete_one({"_id": role["_id"]})
-    await record(actor, "delete", "role", role["_id"], role["code"])
+
+    async def delete(session: AsyncClientSession) -> None:
+        # Inactive users may still hold the role; remove it from them too.
+        await db.users.update_many({"roles": role["code"]}, {"$pull": {"roles": role["code"]}}, session=session)
+        await db.roles.delete_one({"_id": role["_id"]}, session=session)
+        await record(actor, "delete", "role", role["_id"], role["code"], session=session)
+
+    await in_transaction(delete)
