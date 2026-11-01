@@ -1,9 +1,9 @@
 from datetime import UTC, date, datetime, time
-from typing import Any
+from typing import Annotated, Any, TypeAlias
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Query, Response, status
 from pydantic import BaseModel
 
 from app.config import settings
@@ -24,6 +24,15 @@ def to_oid(value: str) -> ObjectId:
 # Service engineer accounts; the active ones are those who can be assigned and planned.
 ENGINEER_FILTER: dict[str, Any] = {"roles": Role.SERVICE_ENGINEER.value}
 ACTIVE_ENGINEER_FILTER: dict[str, Any] = ENGINEER_FILTER | {"is_active": True}
+
+
+# Paging for list endpoints. The total number of matches is returned in the X-Total-Count header.
+Skip: TypeAlias = Annotated[int, Query(ge=0, description="How many results to skip")]
+Limit: TypeAlias = Annotated[int, Query(ge=1, le=500, description="Maximum results to return (up to 500)")]
+
+
+async def set_total(response: Response, collection: Any, query: dict) -> None:
+    response.headers["X-Total-Count"] = str(await collection.count_documents(query))
 
 
 def id_or_number_query(value: str, number_field: str) -> dict:

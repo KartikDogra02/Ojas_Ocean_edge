@@ -1,6 +1,6 @@
 from typing import Annotated, TypeAlias
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
@@ -9,7 +9,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.role import Role
 from app.models.user import UserCreate, UserOut, UserUpdate
-from app.routers.common import USER_PROJECTION, from_doc, require_found, to_oid
+from app.routers.common import USER_PROJECTION, Limit, Skip, from_doc, require_found, set_total, to_oid
 from app.security import hash_password
 from app.services import duplicate_key_error, ensure_roles_exist, insert_user, role_values
 
@@ -29,9 +29,11 @@ async def create_user(user: UserCreate):
 
 
 @router.get("", response_model=list[UserOut], dependencies=admin_only)
-async def list_users(role: str | None = None, limit: int = 100):
+async def list_users(response: Response, role: str | None = None, skip: Skip = 0, limit: Limit = 100):
     query = {"roles": role.lower()} if role else {}
-    return [from_doc(d) async for d in get_db().users.find(query, USER_PROJECTION).limit(limit)]
+    await set_total(response, get_db().users, query)
+    cursor = get_db().users.find(query, USER_PROJECTION).sort("username", 1).skip(skip).limit(limit)
+    return [from_doc(d) async for d in cursor]
 
 
 @router.get("/me", response_model=UserOut)

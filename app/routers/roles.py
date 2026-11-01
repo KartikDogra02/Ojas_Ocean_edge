@@ -1,5 +1,5 @@
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
@@ -8,7 +8,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.permission import default_menu_permissions
 from app.models.role import Role, RoleCreate, RoleOut, RoleUpdate
-from app.routers.common import from_doc, require_found
+from app.routers.common import Limit, Skip, from_doc, require_found, set_total
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 admin_only = [Depends(require_roles(Role.ADMIN))]
@@ -46,8 +46,9 @@ async def _out(role: dict) -> RoleOut:
 
 
 @router.get("", response_model=list[RoleOut], dependencies=admin_or_hr)
-async def list_roles(skip: int = 0, limit: int = 100, is_active: bool | None = None):
+async def list_roles(response: Response, skip: Skip = 0, limit: Limit = 100, is_active: bool | None = None):
     query = {} if is_active is None else {"is_active": is_active}
+    await set_total(response, get_db().roles, query)
     roles = [r async for r in get_db().roles.find(query).sort("created_at", 1).skip(skip).limit(limit)]
     counts = await _user_counts([r["code"] for r in roles])
     return [RoleOut(**from_doc(r), user_count=counts.get(r["code"], 0)) for r in roles]

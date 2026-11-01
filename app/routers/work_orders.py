@@ -1,7 +1,7 @@
 from typing import Annotated, TypeAlias
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pymongo import ReturnDocument
 
 from app.auth import CurrentPrincipal, Principal, require_roles
@@ -17,7 +17,7 @@ from app.models.work_order import (
     WorkPlanConversion,
 )
 from app.models.work_plan import Priority
-from app.routers.common import id_or_number_query, require_found
+from app.routers.common import Limit, Skip, id_or_number_query, require_found, set_total
 from app.routers.work_plans import engineers_by_id, own_engineer_id, plan_visibility, validate_engineers
 from app.services import next_sequence
 
@@ -164,6 +164,7 @@ async def start_work_order(id_or_number: str, principal: CurrentPrincipal):
 
 @router.get("/work-orders", response_model=list[WorkOrderOut])
 async def list_work_orders(
+    response: Response,
     principal: CurrentPrincipal,
     priority: Priority | None = None,
     service_type: ServiceType | None = None,
@@ -171,8 +172,8 @@ async def list_work_orders(
     engineer_id: str | None = None,
     customer: str | None = None,
     work_plan: Annotated[str | None, Query(description="Work plan number, e.g. WP-2026-001")] = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     """View-all roles see every work order; service engineers only those they're assigned to."""
     query = await plan_visibility(principal)
@@ -190,6 +191,7 @@ async def list_work_orders(
         query["customer.company"] = customer
     if work_plan is not None:
         query["work_plan.plan_number"] = work_plan.upper()
+    await set_total(response, get_db().work_orders, query)
     cursor = get_db().work_orders.find(query).sort("created_at", -1).skip(skip).limit(limit)
     return await _out([d async for d in cursor])
 

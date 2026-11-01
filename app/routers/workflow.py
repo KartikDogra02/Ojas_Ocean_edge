@@ -2,7 +2,7 @@ import re
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 from app.auth import CurrentPrincipal
 from app.db import get_db
@@ -21,6 +21,7 @@ from app.models.workflow import (
     WorkflowChain,
     WorkflowSummary,
 )
+from app.routers.common import Limit, Skip
 from app.routers.work_plans import engineers_by_id, plan_visibility
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
@@ -52,12 +53,13 @@ def _stage(order: dict | None, has_fsr: bool, has_cert: bool) -> PipelineStage:
 
 @router.get("", response_model=Workflow)
 async def workflow(
+    response: Response,
     principal: CurrentPrincipal,
     search: str | None = None,
     stage: PipelineStage | None = None,
     priority: Priority | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     """Every job traced from Work Plan → Work Order → Crew → FSR → ISO Certificate, with expenses.
 
@@ -190,4 +192,5 @@ async def workflow(
         ]
     # Newest first, by whichever step was created first.
     chains.sort(key=_created_at, reverse=True)
+    response.headers["X-Total-Count"] = str(len(chains))
     return Workflow(summary=summary, chains=chains[skip : skip + limit])

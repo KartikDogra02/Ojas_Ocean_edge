@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import SecretStr
 
 from app.auth import require_roles
@@ -7,7 +7,7 @@ from app.models.role import Role
 from app.models.service_engineer import ServiceEngineerCreate, ServiceEngineerProfile
 from app.models.territory import Territory
 from app.models.user import ServiceEngineerCreated, UserCreate, UserOut
-from app.routers.common import ENGINEER_FILTER, USER_PROJECTION, from_doc, to_oid
+from app.routers.common import ENGINEER_FILTER, USER_PROJECTION, Limit, Skip, from_doc, set_total, to_oid
 from app.security import generate_temporary_password
 from app.services import insert_user
 
@@ -42,10 +42,12 @@ async def provision_service_engineer(body: ServiceEngineerCreate):
 
 @router.get("", response_model=list[UserOut])
 async def list_service_engineers(
+    response: Response,
     territory: Territory | None = None,
     skill: str | None = None,
     active: bool | None = None,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     query: dict = dict(ENGINEER_FILTER)
     if territory is not None:
@@ -54,7 +56,8 @@ async def list_service_engineers(
         query["service_engineer.skills"] = skill
     if active is not None:
         query["is_active"] = active
-    cursor = get_db().users.find(query, USER_PROJECTION).sort("service_engineer.engineer_id", 1).limit(limit)
+    await set_total(response, get_db().users, query)
+    cursor = get_db().users.find(query, USER_PROJECTION).sort("service_engineer.engineer_id", 1).skip(skip).limit(limit)
     return [from_doc(d) async for d in cursor]
 
 

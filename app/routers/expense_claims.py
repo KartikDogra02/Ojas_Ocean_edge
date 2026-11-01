@@ -23,7 +23,7 @@ from app.models.expense_claim import (
     ReviewDecision,
 )
 from app.models.role import Role
-from app.routers.common import FileLink, file_link, id_or_number_query, require_found
+from app.routers.common import FileLink, Limit, Skip, file_link, id_or_number_query, require_found, set_total
 from app.routers.work_plans import plan_visibility
 from app.services import next_sequence
 from app.storage import FileNotFound, content_disposition, get_storage
@@ -135,14 +135,15 @@ async def submit_expense_claim(body: ExpenseClaimCreate, principal: CurrentPrinc
 
 @router.get("", response_model=list[ExpenseClaimOut])
 async def list_expense_claims(
+    response: Response,
     principal: CurrentPrincipal,
     status_: Annotated[ExpenseStatus | None, Query(alias="status")] = None,
     category: ExpenseCategory | None = None,
     claimant_id: Annotated[str | None, Query(description="HR/admin: one person's claims")] = None,
     work_plan: Annotated[str | None, Query(description="Work plan number, e.g. WP-2026-001")] = None,
     awaiting_my_action: bool = False,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     """Admin, HR, technical team and owner see every claim; everyone else sees their own.
 
@@ -166,6 +167,7 @@ async def list_expense_claims(
         query["status"] = {"$in": statuses}
         query["claimant.user_id"] = {"$ne": principal.user_id}
         query["history.user_id"] = {"$ne": principal.user_id}
+    await set_total(response, get_db().expense_claims, query)
     cursor = get_db().expense_claims.find(query).sort("created_at", -1).skip(skip).limit(limit)
     return [_out(d) async for d in cursor]
 

@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated, TypeAlias
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
@@ -10,7 +10,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.reference_standard import ReferenceStandardCreate, ReferenceStandardOut, ReferenceStandardUpdate
 from app.models.role import Role
-from app.routers.common import from_doc, require_found, to_mongo_date, to_oid
+from app.routers.common import Limit, Skip, from_doc, require_found, set_total, to_mongo_date, to_oid
 
 router = APIRouter(prefix="/reference-standards", tags=["reference-standards"])
 Creator: TypeAlias = Annotated[Principal, Depends(require_roles(Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER))]
@@ -56,10 +56,11 @@ async def create_reference_standard(body: ReferenceStandardCreate, creator: Crea
 
 @router.get("", response_model=list[ReferenceStandardOut])
 async def list_reference_standards(
+    response: Response,
     due_before: date | None = None,
     storage_location_id: str | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     """Sorted by due date, soonest first. `due_before` finds equipment needing recalibration."""
     query: dict = {}
@@ -67,6 +68,7 @@ async def list_reference_standards(
         query["due_date"] = {"$lt": to_mongo_date(due_before)}
     if storage_location_id is not None:
         query["storage_location_id"] = storage_location_id.upper()
+    await set_total(response, get_db().reference_standards, query)
     cursor = get_db().reference_standards.find(query).sort("due_date", 1).skip(skip).limit(limit)
     return [_out(d) async for d in cursor]
 

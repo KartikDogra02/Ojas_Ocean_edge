@@ -1,13 +1,13 @@
 from typing import Annotated, TypeAlias
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.auth import Principal, require_roles
 from app.db import get_db
 from app.models.certificate import CertificateCreate, CertificateOut, InstrumentType, TestPoint, Verdict
 from app.models.common import utcnow
 from app.models.role import Role
-from app.routers.common import from_doc, id_or_number_query, to_mongo_date, to_oid
+from app.routers.common import Limit, Skip, from_doc, id_or_number_query, set_total, to_mongo_date, to_oid
 from app.services import next_sequence
 
 router = APIRouter(prefix="/certificates", tags=["certificates"])
@@ -96,14 +96,15 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
 
 @router.get("", response_model=list[CertificateOut])
 async def list_certificates(
+    response: Response,
     customer: str | None = None,
     serial_number: str | None = None,
     instrument_type: InstrumentType | None = None,
     result: Verdict | None = None,
     reference_standard_id: Annotated[str | None, Query(description="Certificates that used this standard")] = None,
     work_order: Annotated[str | None, Query(description="Work order number, e.g. WO-2026-001")] = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     query: dict = {}
     if customer is not None:
@@ -118,6 +119,7 @@ async def list_certificates(
         query["reference_standard_ids"] = to_oid(reference_standard_id)
     if work_order is not None:
         query["work_order.work_order_number"] = work_order.upper()
+    await set_total(response, get_db().certificates, query)
     cursor = get_db().certificates.find(query).sort("created_at", -1).skip(skip).limit(limit)
     return [_out(d) async for d in cursor]
 

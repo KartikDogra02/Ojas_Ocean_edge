@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.auth import CurrentPrincipal
 from app.db import get_db
 from app.models.check_in import CheckInCreate, CheckInOut, PlaceType
 from app.models.common import utcnow
 from app.models.role import Role
-from app.routers.common import require_found
+from app.routers.common import Limit, Skip, require_found, set_total
 from app.routers.work_plans import own_engineer_id
 
 router = APIRouter(prefix="/check-ins", tags=["check-ins"])
@@ -42,16 +42,18 @@ async def check_in(body: CheckInCreate, principal: CurrentPrincipal):
 
 @router.get("", response_model=list[CheckInOut])
 async def list_check_ins(
+    response: Response,
     principal: CurrentPrincipal,
     engineer_id: str | None = None,
     place_type: PlaceType | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     """Check-in history, newest first."""
     query = await _scope(principal, engineer_id)
     if place_type is not None:
         query["place_type"] = place_type.value
+    await set_total(response, get_db().check_ins, query)
     cursor = get_db().check_ins.find(query).sort("checked_in_at", -1).skip(skip).limit(limit)
     return [_out(d) async for d in cursor]
 

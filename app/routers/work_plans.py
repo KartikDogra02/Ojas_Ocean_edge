@@ -1,6 +1,6 @@
 from typing import Annotated, TypeAlias
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pymongo import ReturnDocument
 
 from app.auth import CurrentPrincipal, Principal, require_roles
@@ -15,7 +15,7 @@ from app.models.work_plan import (
     WorkPlanStatus,
     WorkPlanUpdate,
 )
-from app.routers.common import ACTIVE_ENGINEER_FILTER, id_or_number_query, require_found
+from app.routers.common import ACTIVE_ENGINEER_FILTER, Limit, Skip, id_or_number_query, require_found, set_total
 from app.services import next_sequence
 
 router = APIRouter(prefix="/work-plans", tags=["work-plans"])
@@ -117,13 +117,14 @@ async def create_work_plan(body: WorkPlanCreate, planner: Planner):
 
 @router.get("", response_model=list[WorkPlanOut])
 async def list_work_plans(
+    response: Response,
     principal: CurrentPrincipal,
     priority: Priority | None = None,
     status_: Annotated[WorkPlanStatus | None, Query(alias="status")] = None,
     engineer_id: str | None = None,
     customer: str | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     query = await plan_visibility(principal)
     if priority is not None:
@@ -138,6 +139,7 @@ async def list_work_plans(
             return []  # an engineer asking about someone else's plans
     if customer is not None:
         query["customer.company"] = customer
+    await set_total(response, get_db().work_plans, query)
     cursor = get_db().work_plans.find(query).sort("created_at", -1).skip(skip).limit(limit)
     return await _out([d async for d in cursor])
 

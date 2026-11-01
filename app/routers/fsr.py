@@ -11,7 +11,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.fsr import FsrCreate, FsrOut
 from app.models.work_order import WorkOrderStatus
-from app.routers.common import FileLink, file_link, id_or_number_query, require_found
+from app.routers.common import FileLink, Limit, Skip, file_link, id_or_number_query, require_found, set_total
 from app.routers.signatures import png_dimensions
 from app.routers.work_plans import own_engineer_id, plan_visibility
 from app.services import next_sequence
@@ -159,17 +159,19 @@ async def submit_fsr(body: FsrCreate, principal: CurrentPrincipal):
 
 @router.get("", response_model=list[FsrOut])
 async def list_fsrs(
+    response: Response,
     principal: CurrentPrincipal,
     work_order: str | None = None,
     customer: str | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: Skip = 0,
+    limit: Limit = 100,
 ):
     query = await plan_visibility(principal)
     if work_order is not None:
         query["work_order.work_order_number"] = work_order.upper()
     if customer is not None:
         query["work_order.customer"] = customer
+    await set_total(response, get_db().field_service_reports, query)
     cursor = get_db().field_service_reports.find(query).sort("submitted_at", -1).skip(skip).limit(limit)
     return [_out(d) async for d in cursor]
 
