@@ -137,3 +137,62 @@ async def test_workflow_chain_and_summary(client, tech, engineer):
     assert staged["completion"] == 20 and staged["stage"] == "staged"
     found = (await client.get("/workflow", headers=tech.headers, params={"search": "jude"})).json()["chains"]
     assert [c["title"] for c in found] == ["Staged"]
+
+
+async def test_workflow_filters_paging_and_visibility(client, tech, engineer, engineer2):
+    async def plan(title, priority, crew):
+        response = await client.post(
+            "/work-plans",
+            headers=tech.headers,
+            json={"title": title, "priority": priority, "customer": {"company": "C"}, "assigned_engineer_ids": crew},
+        )
+        return response.json()
+
+    p1 = await plan("Alpha", "low", [engineer.engineer_id])
+    await plan("Bravo", "high", [engineer2.engineer_id])
+    p3 = await plan("Charlie", "high", [engineer.engineer_id])
+    await client.post(f"/work-plans/{p1['id']}/convert", headers=tech.headers, json={"service_type": "inspection"})
+    order = (
+        await client.post(f"/work-plans/{p3['id']}/convert", headers=tech.headers, json={"service_type": "inspection"})
+    ).json()
+    await client.post(f"/work-orders/{order['id']}/start", headers=engineer.headers)
+    await client.post(
+        "/work-orders",
+        headers=tech.headers,
+        json={
+            "title": "Delta direct",
+            "service_type": "breakdown_repair",
+            "priority": "critical",
+            "assigned_engineer_ids": [engineer2.engineer_id],
+            "customer": {"company": "D"},
+        },
+    )
+
+    async def titles(headers, **params):
+        response = await client.get("/workflow", headers=headers, params=params)
+        return [c["title"] for c in response.json()["chains"]], response
+
+    # Newest first, paged, with totals.
+    all_titles, response = await titles(tech.headers)
+    assert all_titles == ["Delta direct", "Charlie", "Bravo", "Alpha"]
+    assert response.json()["summary"] == {
+        "total_chains": 4,
+        "staged_plans": 1,
+        "work_orders_dispatched": 2,
+        "field_ops_in_progress": 1,
+        "reported": 0,
+        "iso_certified": 0,
+    }
+    page, response = await titles(tech.headers, skip=1, limit=2)
+    assert page == ["Charlie", "Bravo"] and response.headers["X-Total-Count"] == "4"
+    assert (await titles(tech.headers, stage="in_progress"))[0] == ["Charlie"]
+    assert (await titles(tech.headers, stage="dispatched"))[0] == ["Delta direct", "Alpha"]
+    assert (await titles(tech.headers, priority="high"))[0] == ["Charlie", "Bravo"]
+    assert (await titles(tech.headers, search=order["work_order_number"].lower()))[0] == ["Charlie"]
+
+    # Service engineers only see jobs they're on; their summary counts only those.
+    mine, response = await titles(engineer.headers)
+    assert mine == ["Charlie", "Alpha"] and response.json()["summary"]["total_chains"] == 2
+    chains = {c["title"]: c for c in (await client.get("/workflow", headers=tech.headers)).json()["chains"]}
+    assert chains["Delta direct"]["plan"] is None and chains["Delta direct"]["completion"] == 60
+    assert chains["Alpha"]["work_order"]["status"] == "dispatched" and chains["Alpha"]["completion"] == 60
