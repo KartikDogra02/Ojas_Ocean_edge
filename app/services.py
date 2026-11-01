@@ -1,3 +1,4 @@
+import contextlib
 import logging
 
 from fastapi import HTTPException, status
@@ -28,14 +29,14 @@ async def ensure_roles_exist(roles: list[str]) -> None:
     found = await get_db().roles.distinct("code", {"code": {"$in": roles}, "is_active": True})
     missing = sorted(set(roles) - set(found))
     if missing:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown or inactive roles: {', '.join(missing)}")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown or inactive roles: {', '.join(missing)}")
 
 
 async def seed_system_roles() -> None:
     """Make sure the built-in roles exist. Existing roles keep their current settings."""
     now = utcnow()
     for role in Role:
-        try:
+        with contextlib.suppress(DuplicateKeyError):  # another worker inserted it concurrently
             await get_db().roles.update_one(
                 {"code": role.value},
                 {
@@ -51,8 +52,6 @@ async def seed_system_roles() -> None:
                 },
                 upsert=True,
             )
-        except DuplicateKeyError:
-            pass  # another worker inserted it concurrently
         # Menu items added since the role was created get their default access; existing choices are kept.
         for menu_id, allowed in default_menu_permissions(role.value).items():
             await get_db().roles.update_one(
@@ -124,7 +123,7 @@ async def insert_user(
     try:
         await get_db().users.insert_one(doc)
     except DuplicateKeyError as exc:
-        raise duplicate_key_error(exc)
+        raise duplicate_key_error(exc) from exc
     doc.pop("hashed_password")
     return doc
 

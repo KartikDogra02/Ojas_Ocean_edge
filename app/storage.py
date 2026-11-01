@@ -7,6 +7,7 @@ Files are addressed by a key such as "receipts/EXP-2026-001/3f2a….pdf". STORAG
 """
 
 import asyncio
+import contextlib
 from functools import lru_cache
 from typing import Protocol
 from urllib.parse import quote
@@ -53,17 +54,15 @@ class GridFSStorage:
         try:
             stream = await self._bucket().open_download_stream(key)
         except NoFile:
-            raise FileNotFound(key)
+            raise FileNotFound(key) from None
         return await stream.read()
 
     async def exists(self, key: str) -> bool:
         return await get_db()["files.files"].count_documents({"_id": key}, limit=1) > 0
 
     async def delete(self, key: str) -> None:
-        try:
+        with contextlib.suppress(NoFile):
             await self._bucket().delete(key)
-        except NoFile:
-            pass
 
     def link(self, key: str, filename: str, content_type: str) -> str | None:
         return None
@@ -101,7 +100,7 @@ class R2Storage:
             response = await self._call("get_object", Key=key)
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
-                raise FileNotFound(key)
+                raise FileNotFound(key) from exc
             raise
         return await asyncio.to_thread(response["Body"].read)
 

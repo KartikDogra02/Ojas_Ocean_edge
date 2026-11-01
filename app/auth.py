@@ -52,7 +52,7 @@ async def get_authenticated_principal(token: Annotated[str | None, Depends(oauth
         claims = decode_access_token(token)
         user_id = ObjectId(claims["sub"])
     except (jwt.InvalidTokenError, InvalidId):
-        raise _unauthorized()
+        raise _unauthorized() from None
 
     user = await get_db().users.find_one(
         {"_id": user_id},

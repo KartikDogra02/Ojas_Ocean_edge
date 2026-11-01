@@ -19,7 +19,8 @@ async def disconnect() -> None:
 
 
 def get_db() -> AsyncDatabase:
-    assert client is not None, "Mongo client not initialised"
+    if client is None:
+        raise RuntimeError("Mongo client not initialised; call connect() first")
     return client[settings.mongo_db]
 
 

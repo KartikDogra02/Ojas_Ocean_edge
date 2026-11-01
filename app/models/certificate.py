@@ -18,7 +18,7 @@ class InstrumentType(LabeledEnum):
 
 
 class Verdict(StrEnum):
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105 - test verdict, not a password
     FAIL = "fail"
 
 

@@ -104,7 +104,7 @@ async def submit_expense_claim(body: ExpenseClaimCreate, principal: CurrentPrinc
     if amount is None:
         amount = (Decimal(str(body.distance_km)) * rate).quantize(Decimal("0.01"), ROUND_HALF_UP)
         if amount <= 0:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Distance is too short to claim")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Distance is too short to claim")
 
     work_plan = None
     if body.work_plan is not None:
@@ -233,7 +233,7 @@ async def download_receipt(claim_id_or_number: str, principal: CurrentPrincipal)
     try:
         data = await get_storage().get(receipt["key"])
     except FileNotFound:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Receipt file is missing")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Receipt file is missing") from None
     return Response(
         data,
         media_type=receipt["content_type"],

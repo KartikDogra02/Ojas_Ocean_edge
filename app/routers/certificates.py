@@ -62,7 +62,7 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
     expired = [s["serial_number"] for s in standards.values() if s["due_date"].date() < calibration_date]
     if expired:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             f"Reference standard(s) past their calibration due date: {', '.join(expired)}",
         )
 
@@ -70,7 +70,7 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
     failed = [p["parameter"] or f"#{i}" for i, p in enumerate(test_points, 1) if p["status"] == Verdict.FAIL]
     if failed and body.result == Verdict.PASS:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             f"Result can't be pass: test point(s) out of tolerance: {', '.join(failed)}",
         )
 

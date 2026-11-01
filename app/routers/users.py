@@ -23,7 +23,7 @@ _ENGINEER_ROLE_ERROR = "The service_engineer role is managed through /service-en
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, dependencies=admin_only)
 async def create_user(user: UserCreate):
     if Role.SERVICE_ENGINEER in user.roles:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, _ENGINEER_ROLE_ERROR)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, _ENGINEER_ROLE_ERROR)
     # The admin chose this password, so the user must replace it at first login.
     return from_doc(await insert_user(user))
 
@@ -60,7 +60,7 @@ async def update_user(user_id: str, user: UserUpdate, admin: Admin):
     changes = user.model_dump(exclude_unset=True, exclude={"password", "service_engineer"})
     if user.roles is not None:
         if (Role.SERVICE_ENGINEER in user.roles) != is_engineer:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, _ENGINEER_ROLE_ERROR)
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, _ENGINEER_ROLE_ERROR)
         await ensure_roles_exist(user.roles)
         changes["roles"] = role_values(user.roles)
     if user.password is not None:
@@ -71,7 +71,7 @@ async def update_user(user_id: str, user: UserUpdate, admin: Admin):
             changes["must_change_password"] = True
     if user.service_engineer is not None:
         if not is_engineer:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "User is not a service engineer")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "User is not a service engineer")
         for field, value in user.service_engineer.model_dump(exclude_unset=True).items():
             changes[f"service_engineer.{field}"] = value
 
@@ -81,7 +81,7 @@ async def update_user(user_id: str, user: UserUpdate, admin: Admin):
             {"_id": oid}, {"$set": changes}, projection=USER_PROJECTION, return_document=ReturnDocument.AFTER
         )
     except DuplicateKeyError as exc:
-        raise duplicate_key_error(exc)
+        raise duplicate_key_error(exc) from exc
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     return from_doc(doc)

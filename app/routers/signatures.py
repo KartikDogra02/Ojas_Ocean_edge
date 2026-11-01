@@ -106,7 +106,7 @@ async def _image(user: dict) -> Response:
     try:
         data = await get_storage().get(_signature_of(user)["key"])
     except FileNotFound:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signature file is missing")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signature file is missing") from None
     return Response(
         data,
         media_type="image/png",

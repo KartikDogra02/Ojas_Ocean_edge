@@ -33,7 +33,7 @@ def _lead(engineer_ids: list[str], lead: str | None) -> str:
         return engineer_ids[0]
     if lead not in engineer_ids:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "lead_engineer_id must be one of the assigned engineers"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "lead_engineer_id must be one of the assigned engineers"
         )
     return lead
 
@@ -114,7 +114,7 @@ async def convert_work_plan(plan_id_or_number: str, body: WorkPlanConversion, di
     engineer_ids = await validate_engineers(body.assigned_engineer_ids or plan["assigned_engineer_ids"])
     if not engineer_ids:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Assign at least one engineer to the plan (or in this request) first"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Assign at least one engineer to the plan (or in this request) first"
         )
     fields = {
         "title": plan["title"],
@@ -211,7 +211,7 @@ async def update_work_order(id_or_number: str, body: WorkOrderUpdate, _: Editor)
     changes = body.model_dump(mode="json", exclude_unset=True)
     for field in ("title", "service_type", "priority", "customer", "assigned_engineer_ids", "lead_engineer_id"):
         if field in changes and changes[field] is None:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{field} can't be cleared")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{field} can't be cleared")
     engineer_ids = order["assigned_engineer_ids"]
     if "assigned_engineer_ids" in changes:
         engineer_ids = changes["assigned_engineer_ids"] = await validate_engineers(changes["assigned_engineer_ids"])

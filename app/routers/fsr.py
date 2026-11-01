@@ -28,14 +28,14 @@ def _decode_signature(data_url: str) -> tuple[bytes, int, int]:
     try:
         data = base64.b64decode(payload, validate=True)
     except (binascii.Error, ValueError):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "client_signature isn't valid base64")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "client_signature isn't valid base64") from None
     if len(data) > settings.signature_max_kb * 1024:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, f"client_signature must be {settings.signature_max_kb} KB or less"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, f"client_signature must be {settings.signature_max_kb} KB or less"
         )
     dimensions = png_dimensions(data)
     if dimensions is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "client_signature must be a PNG image")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "client_signature must be a PNG image")
     return data, *dimensions
 
 
@@ -196,7 +196,7 @@ async def get_fsr_signature(id_or_number: str, principal: CurrentPrincipal):
     try:
         data = await get_storage().get(_signature(await _get(id_or_number, principal))["key"])
     except FileNotFound:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signature file is missing")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Signature file is missing") from None
     return Response(data, media_type="image/png", headers={"X-Content-Type-Options": "nosniff"})
 
 

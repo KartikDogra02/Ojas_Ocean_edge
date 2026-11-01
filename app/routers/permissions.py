@@ -49,7 +49,7 @@ async def _apply(changes: list[tuple[str, str, bool]]) -> datetime:
     """Validate every (menu_id, role_code, allowed) change first, then save them all in one bulk write."""
     unknown_menus = sorted({menu_id for menu_id, _, _ in changes} - MENU_IDS)
     if unknown_menus:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown menu_id(s): {', '.join(unknown_menus)}")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown menu_id(s): {', '.join(unknown_menus)}")
     codes = {code for _, code, _ in changes}
     unknown_roles = sorted(codes - set(await get_db().roles.distinct("code", {"code": {"$in": list(codes)}})))
     if unknown_roles:
@@ -79,10 +79,10 @@ async def update_permissions(body: PermissionsUpdate):
     unknown_menus = sorted({m.menu_id for m in body.permissions} - MENU_IDS)
     if unknown_menus:
         # Checked here too: entries with no role flags never reach _apply's own check.
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown menu_id(s): {', '.join(unknown_menus)}")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown menu_id(s): {', '.join(unknown_menus)}")
     changes = [(m.menu_id, code, allowed) for m in body.permissions for code, allowed in m.permissions.items()]
     if not changes:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No permissions to update")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "No permissions to update")
     now = await _apply(changes)
     return PermissionsUpdateResult(detail=_UPDATED, updated_count=len(body.permissions), timestamp=now)
 

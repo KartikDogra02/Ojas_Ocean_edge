@@ -55,7 +55,7 @@ async def create_reference_standard(body: ReferenceStandardCreate, creator: Crea
     try:
         await get_db().reference_standards.insert_one(doc)
     except DuplicateKeyError as exc:
-        raise _duplicate(exc)
+        raise _duplicate(exc) from exc
     return _out(doc)
 
 
@@ -87,11 +87,11 @@ async def update_reference_standard(standard_id: str, body: ReferenceStandardUpd
     changes = body.model_dump(exclude_unset=True)
     required = set(ReferenceStandardCreate.model_fields) - {"traceability_agency", "storage_location_id"}
     if any(changes.get(k, "") is None for k in required):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Required fields can't be cleared")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Required fields can't be cleared")
     calibration = changes.get("calibration_date", existing["calibration_date"].date())
     due = changes.get("due_date", existing["due_date"].date())
     if due <= calibration:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "due_date must be after calibration_date")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "due_date must be after calibration_date")
 
     changes = _dates_to_mongo(changes) | {"updated_at": utcnow()}
     try:
@@ -99,7 +99,7 @@ async def update_reference_standard(standard_id: str, body: ReferenceStandardUpd
             {"_id": existing["_id"]}, {"$set": changes}, return_document=ReturnDocument.AFTER
         )
     except DuplicateKeyError as exc:
-        raise _duplicate(exc)
+        raise _duplicate(exc) from exc
     return _out(doc)
 
 

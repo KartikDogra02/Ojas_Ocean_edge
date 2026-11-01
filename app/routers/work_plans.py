@@ -34,7 +34,7 @@ async def validate_engineers(engineer_ids: list[str]) -> list[str]:
     missing = [i for i in ids if i not in found]
     if missing:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown or inactive service engineer(s): {', '.join(missing)}"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown or inactive service engineer(s): {', '.join(missing)}"
         )
     return ids
 
@@ -169,7 +169,7 @@ async def update_work_plan(plan_id_or_number: str, body: WorkPlanUpdate, _: Plan
     changes = body.model_dump(mode="json", exclude_unset=True)
     for field in ("title", "priority", "customer", "assigned_engineer_ids"):
         if field in changes and changes[field] is None:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{field} can't be cleared")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{field} can't be cleared")
     if "assigned_engineer_ids" in changes:
         changes["assigned_engineer_ids"] = await validate_engineers(changes["assigned_engineer_ids"])
     changes["updated_at"] = utcnow()

@@ -190,7 +190,7 @@ async def save_daily_entries(body: DayEntriesUpdate, editor: Editor):
         if order and e.engineer_id not in order["assigned_engineer_ids"]:
             errors.append(f"{e.engineer_id} isn't on the crew of {order['work_order_number']}")
     if errors:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, errors)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, errors)
 
     now = utcnow()
     ops = []
@@ -309,7 +309,7 @@ async def save_monthly_entries(body: MonthEntriesUpdate, editor: Editor):
     if missing := await _missing_engineers({e.engineer_id for e in body.entries}):
         errors.append(f"Unknown or inactive service engineer(s): {', '.join(missing)}")
     if errors:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, errors)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, errors)
 
     now = utcnow()
     ops = []

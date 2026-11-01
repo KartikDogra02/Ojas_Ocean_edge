@@ -14,7 +14,7 @@ def to_oid(value: str) -> ObjectId:
     try:
         return ObjectId(value)
     except InvalidId:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid id")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid id") from None
 
 
 def from_doc(doc: dict) -> dict:

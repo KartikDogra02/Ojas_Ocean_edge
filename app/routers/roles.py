@@ -70,7 +70,7 @@ async def create_role(body: RoleCreate):
     try:
         await get_db().roles.insert_one(doc)
     except DuplicateKeyError:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"Role code '{body.code}' already exists")
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Role code '{body.code}' already exists") from None
     return RoleOut(**from_doc(doc), user_count=0)
 
 
