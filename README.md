@@ -74,6 +74,22 @@ create a bucket in it and set `R2_ENDPOINT=http://s3:8333`.
 - **Request logs:** one line per request (method, path, status, duration, user). Each response has an `X-Request-ID`
   header (a client-supplied one is reused), and audit entries store the same id. `LOG_LEVEL` sets the level (INFO).
 
+## MongoDB replica set and transactions
+
+Steps that change several records at once (converting a work plan, submitting an FSR, deleting a work order or a
+role) run in a MongoDB transaction, so a failure part way through saves nothing. Transactions need a replica set:
+
+- **Docker Compose** runs Mongo as a one-node replica set (`rs0`). On first start it creates the internal keyfile and
+  initialises the set; existing data volumes are kept. The healthcheck waits until the node is primary.
+- **API outside Docker:** keep `directConnection=true` in `MONGO_URI` (see `.env.example`), because the set
+  advertises the host name `mongo`, which only resolves inside Docker.
+- **Production:** the database must be a replica set too (MongoDB Atlas always is). A standalone `mongod` fails with
+  "Transaction numbers are only allowed on a replica set member or mongos".
+
+Uploaded files (FSR client signatures) can't be part of a transaction; they're saved first and deleted if the
+transaction fails. Document numbers (e.g. `WO-…`, `FSR-…`) are allocated outside it, so a failed attempt can
+skip a number.
+
 ## CORS
 
 Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated exact origins, e.g.
