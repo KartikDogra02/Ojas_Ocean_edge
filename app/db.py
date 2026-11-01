@@ -63,5 +63,7 @@ async def ensure_indexes() -> None:
     # Planner days are only kept until the day after their date.
     await db.planner_days.create_index("expire_at", expireAfterSeconds=0)
     await db.planner_months.create_index([("engineer_id", 1), ("year", 1), ("month", 1)], unique=True)
+    # Failed logins; each record disappears once its lockout window has passed.
+    await db.login_attempts.create_index("expire_at", expireAfterSeconds=0)
     # Logged-out tokens; Mongo deletes each entry once the token would have expired anyway.
     await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)

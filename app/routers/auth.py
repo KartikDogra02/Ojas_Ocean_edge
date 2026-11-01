@@ -1,9 +1,11 @@
+from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.auth import AuthenticatedPrincipal
+from app.config import settings
 from app.db import get_db
 from app.models.auth import PasswordChange, Token
 from app.models.common import utcnow
@@ -13,20 +15,52 @@ from app.security import DUMMY_HASH, create_access_token, hash_password, verify_
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _attempts_key(login_id: str, request: Request) -> str:
+    ip = request.client.host if request.client else "unknown"
+    return f"{login_id}|{ip}"
+
+
+async def _check_not_locked(key: str) -> None:
+    record = await get_db().login_attempts.find_one({"_id": key})
+    if record and record["count"] >= settings.login_max_attempts:
+        retry_after = int((record["expire_at"] - utcnow()).total_seconds())
+        if retry_after > 0:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "Too many failed login attempts; try again later",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+
+async def _record_failure(key: str) -> None:
+    # Each failure restarts the lockout window; MongoDB deletes the record once it expires.
+    expire_at = utcnow() + timedelta(minutes=settings.login_lockout_minutes)
+    await get_db().login_attempts.update_one(
+        {"_id": key}, {"$inc": {"count": 1}, "$set": {"expire_at": expire_at}}, upsert=True
+    )
+
+
 @router.post("/login", response_model=Token)
-async def login(form: Annotated[OAuth2PasswordRequestForm, Depends()]):
-    """Log in with username (or email) and password. Send the token as `Authorization: Bearer <token>`."""
+async def login(request: Request, form: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    """Log in with username (or email) and password. Send the token as `Authorization: Bearer <token>`.
+
+    After LOGIN_MAX_ATTEMPTS failures for the same username from the same address, further attempts get
+    429 with a Retry-After header until LOGIN_LOCKOUT_MINUTES have passed since the last failure.
+    """
     login_id = form.username.strip().lower()
+    key = _attempts_key(login_id, request)
+    await _check_not_locked(key)
     field = "email" if "@" in login_id else "username"
     user = await get_db().users.find_one(
         {field: login_id}, {"hashed_password": 1, "is_active": 1, "must_change_password": 1}
     )
     if user is None:
         verify_password(form.password, DUMMY_HASH)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect username or password")
-    if not verify_password(form.password, user["hashed_password"]) or not user.get("is_active", False):
+    if user is None or not verify_password(form.password, user["hashed_password"]) or not user.get("is_active"):
+        await _record_failure(key)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect username or password")
 
+    await get_db().login_attempts.delete_one({"_id": key})
     token, expires_in = create_access_token(str(user["_id"]))
     return Token(access_token=token, expires_in=expires_in, must_change_password=user.get("must_change_password", True))
 
