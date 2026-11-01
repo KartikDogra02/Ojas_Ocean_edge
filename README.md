@@ -106,16 +106,16 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 | `GET /certificates/{id_or_number}` | Logged in — e.g. `CAL-2026-10-0001` (year, month, then up to 9999 a month) |
 | `POST /certificates` | Technical team, service engineers — auto-numbered; standards must be in calibration; `test_points` take nominal/observed values (deviation and pass/fail are calculated); optional `work_order` link |
 | `DELETE /certificates/{id}` | Admin |
-| `GET /work-plans?priority=&status=&engineer_id=&customer=` | Admin, HR, technical team see all; service engineers see plans they're assigned to |
+| `GET /work-plans?priority=&status=&engineer_id=&customer=` | Admin, HR, technical team, owner see all; service engineers see plans they're assigned to |
 | `GET /work-plans/{id_or_number}` | As above — e.g. `WP-2026-001` |
 | `POST`/`PATCH`/`DELETE /work-plans...` | Admin, technical team — assign engineers by ID (`ENG-2026-001`); none = draft |
 | `POST /work-plans/{id}/convert` | Technical team only — turns the plan into a dispatched work order (needs `service_type`); the plan is then locked |
 | `POST /work-orders` | Technical team only — create and dispatch directly; at least one engineer, `lead_engineer_id` defaults to the first |
-| `GET /work-orders?priority=&service_type=&engineer_id=&customer=&work_plan=` | Admin, HR, technical team see all; service engineers see work orders they're on |
+| `GET /work-orders?priority=&service_type=&engineer_id=&customer=&work_plan=` | Admin, HR, technical team, owner see all; service engineers see work orders they're on |
 | `PATCH`/`DELETE /work-orders/{id_or_number}` | Admin, technical team — deleting a converted work order unlocks its plan |
 | `POST /work-orders/{id_or_number}/start` | Crew or technical team — dispatched → in progress |
 | `POST /fsr` | Engineers on the work order's crew — Digital Field Service Report; completes the work order (one per work order) |
-| `GET /fsr?work_order=&customer=`, `GET /fsr/{id_or_number}` | Admin, HR, technical team see all; engineers see FSRs for work orders they were on |
+| `GET /fsr?work_order=&customer=`, `GET /fsr/{id_or_number}` | Admin, HR, technical team, owner see all; engineers see FSRs for work orders they were on |
 | `GET /fsr/{id}/signature`, `/signature/link` | The client's drawn signature (PNG) |
 | `POST /check-ins` | Service engineers — type where they are (hotel, vessel, airport, workshop, customer site, other) |
 | `GET /check-ins?engineer_id=&place_type=`, `GET /check-ins/latest` | History, and each engineer's latest check-in (where they are now) |
