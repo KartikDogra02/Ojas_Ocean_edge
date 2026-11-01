@@ -76,6 +76,10 @@ async def get_permissions():
 @router.put("/permissions", response_model=PermissionsUpdateResult, dependencies=admin_only)
 async def update_permissions(body: PermissionsUpdate):
     """Bulk save from the permissions grid: one entry per menu item, with a flag per role."""
+    unknown_menus = sorted({m.menu_id for m in body.permissions} - MENU_IDS)
+    if unknown_menus:
+        # Checked here too: entries with no role flags never reach _apply's own check.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown menu_id(s): {', '.join(unknown_menus)}")
     changes = [(m.menu_id, code, allowed) for m in body.permissions for code, allowed in m.permissions.items()]
     if not changes:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No permissions to update")
