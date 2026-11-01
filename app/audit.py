@@ -3,6 +3,7 @@
 from typing import Any
 
 from bson import ObjectId
+from pymongo.asynchronous.client_session import AsyncClientSession
 
 from app.auth import Principal
 from app.db import get_db
@@ -56,8 +57,12 @@ async def record(
     *,
     changed: dict[str, list[Any]] | None = None,
     details: dict[str, Any] | None = None,
+    session: AsyncClientSession | None = None,
 ) -> None:
-    """Add an audit entry, e.g. record(admin, "update", "user", user_id, changed=changes(before, after))."""
+    """Add an audit entry, e.g. record(admin, "update", "user", user_id, changed=changes(before, after)).
+
+    Pass the `session` of a transaction to save the entry only if the change itself is committed.
+    """
     request = current_request()
     await get_db().audit_log.insert_one(
         {
@@ -72,5 +77,6 @@ async def record(
             "changes": _clean(changed) if changed else None,
             "details": _clean(details) if details else None,
             "request_id": request.request_id if request else None,
-        }
+        },
+        session=session,
     )

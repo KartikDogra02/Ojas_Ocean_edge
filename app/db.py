@@ -1,4 +1,7 @@
+from collections.abc import Awaitable, Callable
+
 from pymongo import AsyncMongoClient
+from pymongo.asynchronous.client_session import AsyncClientSession
 from pymongo.asynchronous.database import AsyncDatabase
 
 from app.config import settings
@@ -22,6 +25,18 @@ def get_db() -> AsyncDatabase:
     if client is None:
         raise RuntimeError("Mongo client not initialised; call connect() first")
     return client[settings.mongo_db]
+
+
+async def in_transaction[T](work: Callable[[AsyncClientSession], Awaitable[T]]) -> T:
+    """Run `work(session)` as one transaction: the writes it passes `session=` to all commit, or none do.
+
+    Mongo must be a replica set. `work` is retried on transient errors (e.g. two requests writing the
+    same document), so it should only touch the database; do file uploads before or after it.
+    """
+    if client is None:
+        raise RuntimeError("Mongo client not initialised; call connect() first")
+    async with client.start_session() as session:
+        return await session.with_transaction(work)
 
 
 async def _ensure_ttl(collection, field: str, seconds: int) -> None:
