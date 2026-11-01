@@ -1,7 +1,5 @@
-from datetime import UTC, date, datetime, time
 from typing import Annotated, TypeAlias
 
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth import Principal, require_roles
@@ -9,16 +7,12 @@ from app.db import get_db
 from app.models.certificate import CertificateCreate, CertificateOut, InstrumentType, TestPoint, Verdict
 from app.models.common import utcnow
 from app.models.role import Role
-from app.routers.common import from_doc, to_oid
+from app.routers.common import from_doc, id_or_number_query, to_mongo_date, to_oid
 from app.services import next_sequence
 
 router = APIRouter(prefix="/certificates", tags=["certificates"])
 Issuer: TypeAlias = Annotated[Principal, Depends(require_roles(Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER))]
 admin_only = [Depends(require_roles(Role.ADMIN))]
-
-
-def _to_mongo(value: date) -> datetime:
-    return datetime.combine(value, time(), UTC)
 
 
 def _evaluate(point: TestPoint) -> dict:
@@ -79,7 +73,7 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
     if body.work_order is not None:
         ref = body.work_order
         order = await db.work_orders.find_one(
-            {"_id": ObjectId(ref)} if ObjectId.is_valid(ref) else {"work_order_number": ref.upper()},
+            id_or_number_query(ref, "work_order_number"),
             {"work_order_number": 1},
         )
         if order is None:
@@ -90,7 +84,7 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
         "work_order": work_order,
         "test_points": test_points,
         "certificate_number": await next_sequence("certificate", "CAL", monthly=True, digits=4),
-        "calibration_date": _to_mongo(calibration_date),
+        "calibration_date": to_mongo_date(calibration_date),
         "reference_standard_ids": ids,
         "reference_standards": [{"id": i} | {f: standards[i][f] for f in snapshot_fields} for i in ids],
         "issued_by": issuer.username,
@@ -132,7 +126,7 @@ async def list_certificates(
 async def get_certificate(certificate_id_or_number: str):
     """Look up by id or certificate number (e.g. CAL-2026-10-0001)."""
     key = certificate_id_or_number
-    query = {"_id": ObjectId(key)} if ObjectId.is_valid(key) else {"certificate_number": key.upper()}
+    query = id_or_number_query(key, "certificate_number")
     doc = await get_db().certificates.find_one(query)
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Certificate not found")

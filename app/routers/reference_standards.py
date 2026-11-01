@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, time
+from datetime import date
 from typing import Annotated, TypeAlias
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,7 +10,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.reference_standard import ReferenceStandardCreate, ReferenceStandardOut, ReferenceStandardUpdate
 from app.models.role import Role
-from app.routers.common import from_doc, require_found, to_oid
+from app.routers.common import from_doc, require_found, to_mongo_date, to_oid
 
 router = APIRouter(prefix="/reference-standards", tags=["reference-standards"])
 Creator: TypeAlias = Annotated[Principal, Depends(require_roles(Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER))]
@@ -20,13 +20,8 @@ _DATE_FIELDS = ("calibration_date", "due_date")
 _DUPLICATE_LABELS = {"serial_number": "Serial number", "master_cert_number": "Master cert number"}
 
 
-def _to_mongo(date_value: date) -> datetime:
-    # BSON has no date-only type; store dates as midnight UTC.
-    return datetime.combine(date_value, time(), UTC)
-
-
 def _dates_to_mongo(values: dict) -> dict:
-    return {k: _to_mongo(v) if k in _DATE_FIELDS and v is not None else v for k, v in values.items()}
+    return {k: to_mongo_date(v) if k in _DATE_FIELDS and v is not None else v for k, v in values.items()}
 
 
 def _out(doc: dict) -> ReferenceStandardOut:
@@ -69,7 +64,7 @@ async def list_reference_standards(
     """Sorted by due date, soonest first. `due_before` finds equipment needing recalibration."""
     query: dict = {}
     if due_before is not None:
-        query["due_date"] = {"$lt": _to_mongo(due_before)}
+        query["due_date"] = {"$lt": to_mongo_date(due_before)}
     if storage_location_id is not None:
         query["storage_location_id"] = storage_location_id.upper()
     cursor = get_db().reference_standards.find(query).sort("due_date", 1).skip(skip).limit(limit)

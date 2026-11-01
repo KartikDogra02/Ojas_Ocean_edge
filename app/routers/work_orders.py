@@ -17,8 +17,8 @@ from app.models.work_order import (
     WorkPlanConversion,
 )
 from app.models.work_plan import Priority
-from app.routers.common import require_found
-from app.routers.work_plans import engineers_by_id, own_engineer_id, plan_lookup, plan_visibility, validate_engineers
+from app.routers.common import id_or_number_query, require_found
+from app.routers.work_plans import engineers_by_id, own_engineer_id, plan_visibility, validate_engineers
 from app.services import next_sequence
 
 router = APIRouter(tags=["work-orders"])
@@ -58,14 +58,8 @@ async def _out(docs: list[dict]) -> list[WorkOrderOut]:
     ]
 
 
-def _lookup(id_or_number: str) -> dict:
-    if ObjectId.is_valid(id_or_number):
-        return {"_id": ObjectId(id_or_number)}
-    return {"work_order_number": id_or_number.upper()}
-
-
 async def _get(id_or_number: str, extra: dict | None = None) -> dict:
-    doc = await get_db().work_orders.find_one(_lookup(id_or_number) | (extra or {}))
+    doc = await get_db().work_orders.find_one(id_or_number_query(id_or_number, "work_order_number") | (extra or {}))
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Work order not found")
     return doc
@@ -105,7 +99,7 @@ async def create_work_order(body: WorkOrderCreate, dispatcher: Dispatcher):
 async def convert_work_plan(plan_id_or_number: str, body: WorkPlanConversion, dispatcher: Dispatcher):
     """Turn a work plan into a dispatched work order. The plan is then marked converted and locked."""
     db = get_db()
-    plan = await db.work_plans.find_one(plan_lookup(plan_id_or_number))
+    plan = await db.work_plans.find_one(id_or_number_query(plan_id_or_number, "plan_number"))
     if plan is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Work plan not found")
     if plan.get("work_order"):

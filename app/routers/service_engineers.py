@@ -7,7 +7,7 @@ from app.models.role import Role
 from app.models.service_engineer import ServiceEngineerCreate, ServiceEngineerProfile
 from app.models.territory import Territory
 from app.models.user import ServiceEngineerCreated, UserCreate, UserOut
-from app.routers.common import USER_PROJECTION, from_doc, to_oid
+from app.routers.common import ENGINEER_FILTER, USER_PROJECTION, from_doc, to_oid
 from app.security import generate_temporary_password
 from app.services import insert_user
 
@@ -16,8 +16,6 @@ router = APIRouter(
     tags=["service-engineers"],
     dependencies=[Depends(require_roles(Role.ADMIN, Role.HR_TEAM))],
 )
-
-_ENGINEER = {"roles": Role.SERVICE_ENGINEER.value}
 
 
 @router.post(
@@ -49,7 +47,7 @@ async def list_service_engineers(
     active: bool | None = None,
     limit: int = 100,
 ):
-    query: dict = dict(_ENGINEER)
+    query: dict = dict(ENGINEER_FILTER)
     if territory is not None:
         query["service_engineer.territory"] = territory.value
     if skill is not None:
@@ -66,7 +64,7 @@ async def get_service_engineer(engineer_id: str):
     query = {"service_engineer.engineer_id": engineer_id.upper()}
     if not engineer_id.upper().startswith("ENG-"):
         query = {"_id": to_oid(engineer_id)}
-    doc = await get_db().users.find_one(query | _ENGINEER, USER_PROJECTION)
+    doc = await get_db().users.find_one(query | ENGINEER_FILTER, USER_PROJECTION)
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service engineer not found")
     return from_doc(doc)

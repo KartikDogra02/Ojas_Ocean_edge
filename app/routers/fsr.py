@@ -11,7 +11,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.fsr import FsrCreate, FsrOut
 from app.models.work_order import WorkOrderStatus
-from app.routers.common import FileLink, file_link, require_found
+from app.routers.common import FileLink, file_link, id_or_number_query, require_found
 from app.routers.signatures import png_dimensions
 from app.routers.work_plans import own_engineer_id, plan_visibility
 from app.services import next_sequence
@@ -55,15 +55,11 @@ def _out(doc: dict) -> FsrOut:
     )
 
 
-def _lookup(id_or_number: str) -> dict:
-    if ObjectId.is_valid(id_or_number):
-        return {"_id": ObjectId(id_or_number)}
-    return {"fsr_number": id_or_number.upper()}
-
-
 async def _get(id_or_number: str, principal: CurrentPrincipal) -> dict:
     """View-all roles see every FSR; service engineers only those for work orders they were on."""
-    doc = await get_db().field_service_reports.find_one(_lookup(id_or_number) | await plan_visibility(principal))
+    doc = await get_db().field_service_reports.find_one(
+        id_or_number_query(id_or_number, "fsr_number") | await plan_visibility(principal)
+    )
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Field service report not found")
     return doc
@@ -74,9 +70,7 @@ async def submit_fsr(body: FsrCreate, principal: CurrentPrincipal):
     """Submit the FSR for a work order you're on. This signs it off and completes the work order."""
     db = get_db()
     ref = body.work_order
-    order = await db.work_orders.find_one(
-        {"_id": ObjectId(ref)} if ObjectId.is_valid(ref) else {"work_order_number": ref.upper()}
-    )
+    order = await db.work_orders.find_one(id_or_number_query(ref, "work_order_number"))
     if order is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Work order not found")
     engineer_id = await own_engineer_id(principal)

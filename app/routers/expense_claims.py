@@ -23,8 +23,8 @@ from app.models.expense_claim import (
     ReviewDecision,
 )
 from app.models.role import Role
-from app.routers.common import FileLink, file_link, require_found
-from app.routers.work_plans import plan_lookup, plan_visibility
+from app.routers.common import FileLink, file_link, id_or_number_query, require_found
+from app.routers.work_plans import plan_visibility
 from app.services import next_sequence
 from app.storage import FileNotFound, content_disposition, get_storage
 
@@ -69,15 +69,9 @@ def _out(doc: dict) -> ExpenseClaimOut:
     )
 
 
-def _lookup(claim_id_or_number: str) -> dict:
-    if ObjectId.is_valid(claim_id_or_number):
-        return {"_id": ObjectId(claim_id_or_number)}
-    return {"claim_number": claim_id_or_number.upper()}
-
-
 async def _get(claim_id_or_number: str, principal: Principal) -> dict:
     """Claimants see their own claims; view-all roles (admin, HR, technical team, owner) see everyone's."""
-    query = _lookup(claim_id_or_number)
+    query = id_or_number_query(claim_id_or_number, "claim_number")
     if not principal.can_view_all:
         query["claimant.user_id"] = principal.user_id
     doc = await get_db().expense_claims.find_one(query)
@@ -109,7 +103,9 @@ async def submit_expense_claim(body: ExpenseClaimCreate, principal: CurrentPrinc
     work_plan = None
     if body.work_plan is not None:
         # You can only tag work plans you can see (service engineers: plans they're assigned to).
-        plan = await db.work_plans.find_one(plan_lookup(body.work_plan) | await plan_visibility(principal))
+        plan = await db.work_plans.find_one(
+            id_or_number_query(body.work_plan, "plan_number") | await plan_visibility(principal)
+        )
         if plan is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Work plan not found")
         work_plan = {"id": plan["_id"], "plan_number": plan["plan_number"], "title": plan["title"]}
@@ -274,7 +270,7 @@ async def _act(
     payment_reference: str | None = None,
 ) -> dict:
     claim = await get_db().expense_claims.find_one(
-        _lookup(claim_id_or_number), {"claimant": 1, "status": 1, "history": 1}
+        id_or_number_query(claim_id_or_number, "claim_number"), {"claimant": 1, "status": 1, "history": 1}
     )
     if claim is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Expense claim not found")

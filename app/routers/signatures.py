@@ -10,13 +10,12 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.role import Role
 from app.models.service_engineer import SignatureInfo
-from app.routers.common import FileLink, file_link
+from app.routers.common import ENGINEER_FILTER, FileLink, file_link
 from app.storage import FileNotFound, get_storage
 
 router = APIRouter(tags=["signatures"])
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-_ENGINEER = {"roles": Role.SERVICE_ENGINEER.value}
 
 
 def png_dimensions(data: bytes) -> tuple[int, int] | None:
@@ -29,7 +28,7 @@ def png_dimensions(data: bytes) -> tuple[int, int] | None:
 
 async def _engineer(engineer_id: str) -> dict:
     user = await get_db().users.find_one(
-        {"service_engineer.engineer_id": engineer_id.upper()} | _ENGINEER, {"service_engineer": 1}
+        {"service_engineer.engineer_id": engineer_id.upper()} | ENGINEER_FILTER, {"service_engineer": 1}
     )
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service engineer not found")
@@ -37,7 +36,7 @@ async def _engineer(engineer_id: str) -> dict:
 
 
 async def _self(principal: Principal) -> dict:
-    user = await get_db().users.find_one({"_id": principal.user_id} | _ENGINEER, {"service_engineer": 1})
+    user = await get_db().users.find_one({"_id": principal.user_id} | ENGINEER_FILTER, {"service_engineer": 1})
     if user is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only service engineers have a signature")
     return user

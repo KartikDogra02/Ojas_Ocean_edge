@@ -1,9 +1,13 @@
+from datetime import UTC, date, datetime, time
+from typing import Any
+
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 from app.config import settings
+from app.models.role import Role
 from app.storage import get_storage
 
 # Never return the password hash.
@@ -15,6 +19,23 @@ def to_oid(value: str) -> ObjectId:
         return ObjectId(value)
     except InvalidId:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid id") from None
+
+
+# Service engineer accounts; the active ones are those who can be assigned and planned.
+ENGINEER_FILTER: dict[str, Any] = {"roles": Role.SERVICE_ENGINEER.value}
+ACTIVE_ENGINEER_FILTER: dict[str, Any] = ENGINEER_FILTER | {"is_active": True}
+
+
+def id_or_number_query(value: str, number_field: str) -> dict:
+    """Find a record by its id or its number (e.g. WO-2026-001, matched case-insensitively)."""
+    if ObjectId.is_valid(value):
+        return {"_id": ObjectId(value)}
+    return {number_field: value.upper()}
+
+
+def to_mongo_date(day: date) -> datetime:
+    """BSON has no date-only type: calendar days are stored as midnight UTC."""
+    return datetime.combine(day, time(), UTC)
 
 
 def require_found(doc: dict | None, detail: str = "Not found") -> dict:

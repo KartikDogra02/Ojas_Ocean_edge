@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Annotated, TypeAlias
 from zoneinfo import ZoneInfo
 
@@ -28,6 +28,7 @@ from app.models.planner import (
     PlannerWorkOrder,
 )
 from app.models.role import Role
+from app.routers.common import ACTIVE_ENGINEER_FILTER, id_or_number_query, to_mongo_date
 
 router = APIRouter(prefix="/planner", tags=["planner"])
 # Only HR and the technical team change the planner.
@@ -37,8 +38,6 @@ Editor: TypeAlias = Annotated[
         require_roles(Role.HR_TEAM, Role.TECHNICAL_TEAM, detail="Only HR and the technical team can change the planner")
     ),
 ]
-
-_ENGINEER = {"roles": Role.SERVICE_ENGINEER.value, "is_active": True}
 
 
 def _today() -> date:
@@ -51,13 +50,8 @@ def _window() -> tuple[date, date]:
     return today, today + timedelta(days=settings.planner_days - 1)
 
 
-def _dt(day: date) -> datetime:
-    # BSON has no date-only type; store calendar days as midnight UTC.
-    return datetime.combine(day, time(), UTC)
-
-
 async def _engineers(principal: Principal, engineer_id: str | None = None) -> list[dict]:
-    query = dict(_ENGINEER)
+    query = dict(ACTIVE_ENGINEER_FILTER)
     if not principal.can_view_all:
         if Role.SERVICE_ENGINEER.value not in principal.roles:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
@@ -70,7 +64,8 @@ async def _engineers(principal: Principal, engineer_id: str | None = None) -> li
 
 async def _missing_engineers(engineer_ids: set[str]) -> list[str]:
     found = await get_db().users.distinct(
-        "service_engineer.engineer_id", {"service_engineer.engineer_id": {"$in": list(engineer_ids)}} | _ENGINEER
+        "service_engineer.engineer_id",
+        {"service_engineer.engineer_id": {"$in": list(engineer_ids)}} | ACTIVE_ENGINEER_FILTER,
     )
     return sorted(engineer_ids - set(found))
 
@@ -99,7 +94,7 @@ async def _day_planner(principal: Principal, start: date, days: int, engineer_id
     entries = {
         (e["engineer_id"], e["date"].date()): e
         async for e in db.planner_days.find(
-            {"engineer_id": {"$in": ids}, "date": {"$gte": _dt(dates[0]), "$lte": _dt(dates[-1])}}
+            {"engineer_id": {"$in": ids}, "date": {"$gte": to_mongo_date(dates[0]), "$lte": to_mongo_date(dates[-1])}}
         )
     }
     months_off = {
@@ -177,7 +172,7 @@ async def save_daily_entries(body: DayEntriesUpdate, editor: Editor):
 
     orders: dict[str, dict] = {}
     for ref in {e.work_order for e in body.entries if e.work_order}:
-        query = {"_id": ObjectId(ref)} if ObjectId.is_valid(ref) else {"work_order_number": ref.upper()}
+        query = id_or_number_query(ref, "work_order_number")
         order = await db.work_orders.find_one(query, {"work_order_number": 1, "assigned_engineer_ids": 1})
         if order is None:
             errors.append(f"Work order not found: {ref}")
@@ -195,7 +190,7 @@ async def save_daily_entries(body: DayEntriesUpdate, editor: Editor):
     now = utcnow()
     ops = []
     for e in body.entries:
-        key = {"engineer_id": e.engineer_id, "date": _dt(e.date)}
+        key = {"engineer_id": e.engineer_id, "date": to_mongo_date(e.date)}
         if e.status is None:
             ops.append(DeleteOne(key))
             continue
@@ -205,7 +200,7 @@ async def save_daily_entries(body: DayEntriesUpdate, editor: Editor):
             "note": e.note,
             "work_order": {"id": order["_id"], "work_order_number": order["work_order_number"]} if order else None,
             # Past days aren't needed: MongoDB deletes each entry the day after its date.
-            "expire_at": _dt(e.date + timedelta(days=1)),
+            "expire_at": to_mongo_date(e.date + timedelta(days=1)),
             "updated_by": editor.username,
             "updated_at": now,
         }
@@ -236,7 +231,7 @@ async def update_engineer_planner_details(engineer_id: str, body: EngineerPlanne
     changes = {f"service_engineer.{k}": v for k, v in body.model_dump(exclude_unset=True).items()}
     if changes:
         result = await get_db().users.update_one(
-            {"service_engineer.engineer_id": engineer_id.upper()} | _ENGINEER,
+            {"service_engineer.engineer_id": engineer_id.upper()} | ACTIVE_ENGINEER_FILTER,
             {"$set": changes | {"updated_at": utcnow()}},
         )
         if result.matched_count == 0:

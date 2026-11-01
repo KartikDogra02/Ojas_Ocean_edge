@@ -1,6 +1,5 @@
 from typing import Annotated, TypeAlias
 
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pymongo import ReturnDocument
 
@@ -16,7 +15,7 @@ from app.models.work_plan import (
     WorkPlanStatus,
     WorkPlanUpdate,
 )
-from app.routers.common import require_found
+from app.routers.common import ACTIVE_ENGINEER_FILTER, id_or_number_query, require_found
 from app.services import next_sequence
 
 router = APIRouter(prefix="/work-plans", tags=["work-plans"])
@@ -30,7 +29,7 @@ async def validate_engineers(engineer_ids: list[str]) -> list[str]:
         return ids
     found = await get_db().users.distinct(
         "service_engineer.engineer_id",
-        {"service_engineer.engineer_id": {"$in": ids}, "roles": Role.SERVICE_ENGINEER.value, "is_active": True},
+        {"service_engineer.engineer_id": {"$in": ids}} | ACTIVE_ENGINEER_FILTER,
     )
     missing = [i for i in ids if i not in found]
     if missing:
@@ -94,14 +93,8 @@ async def plan_visibility(principal: Principal) -> dict:
     raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
 
 
-def plan_lookup(plan_id_or_number: str) -> dict:
-    if ObjectId.is_valid(plan_id_or_number):
-        return {"_id": ObjectId(plan_id_or_number)}
-    return {"plan_number": plan_id_or_number.upper()}
-
-
 async def _get(plan_id_or_number: str, extra: dict | None = None) -> dict:
-    doc = await get_db().work_plans.find_one(plan_lookup(plan_id_or_number) | (extra or {}))
+    doc = await get_db().work_plans.find_one(id_or_number_query(plan_id_or_number, "plan_number") | (extra or {}))
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Work plan not found")
     return doc
