@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import HTTPException, status
+from pydantic import SecretStr
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
@@ -138,7 +139,7 @@ async def seed_initial_admin() -> None:
     if not (email and username and password):
         logger.warning("No admin user exists and INITIAL_ADMIN_* is not set; set them and restart, or use `python -m app.cli`.")
         return
-    user = UserCreate(email=email, username=username, password=password, roles=[Role.ADMIN])
+    user = UserCreate(email=email, username=username, password=SecretStr(password), roles=[Role.ADMIN])
     try:
         await insert_user(user)
     except HTTPException:

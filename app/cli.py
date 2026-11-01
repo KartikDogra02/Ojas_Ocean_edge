@@ -12,6 +12,7 @@ import os
 import sys
 
 from fastapi import HTTPException
+from pydantic import SecretStr
 
 from app import db
 from app.models.role import Role
@@ -20,7 +21,7 @@ from app.services import insert_user, seed_system_roles
 
 
 async def create_admin(email: str, username: str, full_name: str | None, temporary: bool) -> None:
-    password = os.environ.get("ADMIN_PASSWORD") or getpass.getpass("Password for new admin: ")
+    password = SecretStr(os.environ.get("ADMIN_PASSWORD") or getpass.getpass("Password for new admin: "))
     user = UserCreate(email=email, username=username, full_name=full_name, password=password, roles=[Role.ADMIN])
     await db.connect()
     try:
