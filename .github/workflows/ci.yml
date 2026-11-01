@@ -8,20 +8,23 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    services:
-      mongo:
-        image: mongo:8
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
     env:
-      MONGO_URI: mongodb://localhost:27017
+      MONGO_URI: mongodb://localhost:27017/?directConnection=true
     steps:
       - uses: actions/checkout@v4
+
+      # A one-node replica set, because the app uses transactions. (Service containers can't pass
+      # --replSet, so Mongo is started here instead.)
+      - name: Start MongoDB
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:8 --replSet rs0 --bind_ip_all
+          for i in $(seq 30); do
+            docker exec mongo mongosh --quiet --eval "
+              try { rs.status() } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}) }
+              quit(db.hello().isWritablePrimary ? 0 : 1)" && exit 0
+            sleep 2
+          done
+          echo "MongoDB didn't become primary" && exit 1
 
       - uses: astral-sh/setup-uv@v6
         with:
