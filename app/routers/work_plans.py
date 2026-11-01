@@ -3,6 +3,8 @@ from typing import Annotated, TypeAlias
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pymongo import ReturnDocument
 
+from app.audit import changes as audit_changes
+from app.audit import record
 from app.auth import CurrentPrincipal, Principal, require_roles
 from app.db import get_db
 from app.models.common import utcnow
@@ -112,6 +114,7 @@ async def create_work_plan(body: WorkPlanCreate, planner: Planner):
         "updated_at": now,
     }
     await get_db().work_plans.insert_one(doc)
+    await record(planner, "create", "work_plan", doc["_id"], doc["plan_number"])
     return (await _out([doc]))[0]
 
 
@@ -159,7 +162,7 @@ def _not_converted(plan: dict) -> None:
 
 
 @router.patch("/{plan_id_or_number}", response_model=WorkPlanOut)
-async def update_work_plan(plan_id_or_number: str, body: WorkPlanUpdate, _: Planner):
+async def update_work_plan(plan_id_or_number: str, body: WorkPlanUpdate, planner: Planner):
     plan = await _get(plan_id_or_number)
     _not_converted(plan)
     changes = body.model_dump(mode="json", exclude_unset=True)
@@ -174,11 +177,15 @@ async def update_work_plan(plan_id_or_number: str, body: WorkPlanUpdate, _: Plan
     )
     if doc is None:
         _not_converted(await _get(plan_id_or_number))  # converted in the meantime
-    return (await _out([require_found(doc, "Work plan not found")]))[0]
+    doc = require_found(doc, "Work plan not found")
+    await record(planner, "update", "work_plan", plan["_id"], plan["plan_number"], changed=audit_changes(plan, changes))
+    return (await _out([doc]))[0]
 
 
 @router.delete("/{plan_id_or_number}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_work_plan(plan_id_or_number: str, _: Planner):
+async def delete_work_plan(plan_id_or_number: str, planner: Planner):
     plan = await _get(plan_id_or_number)
     _not_converted(plan)
-    await get_db().work_plans.delete_one({"_id": plan["_id"], "work_order": {"$exists": False}})
+    result = await get_db().work_plans.delete_one({"_id": plan["_id"], "work_order": {"$exists": False}})
+    if result.deleted_count:
+        await record(planner, "delete", "work_plan", plan["_id"], plan["plan_number"])

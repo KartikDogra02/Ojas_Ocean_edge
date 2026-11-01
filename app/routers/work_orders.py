@@ -4,6 +4,8 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pymongo import ReturnDocument
 
+from app.audit import changes as audit_changes
+from app.audit import record
 from app.auth import CurrentPrincipal, Principal, require_roles
 from app.db import get_db
 from app.models.common import utcnow
@@ -88,7 +90,9 @@ async def create_work_order(body: WorkOrderCreate, dispatcher: Dispatcher):
         "lead_engineer_id": _lead(engineer_ids, body.lead_engineer_id),
         "work_plan": None,
     }
-    return (await _out([await _insert(fields, dispatcher)]))[0]
+    doc = await _insert(fields, dispatcher)
+    await record(dispatcher, "create", "work_order", doc["_id"], doc["work_order_number"])
+    return (await _out([doc]))[0]
 
 
 @router.post(
@@ -142,6 +146,14 @@ async def convert_work_plan(plan_id_or_number: str, body: WorkPlanConversion, di
     except Exception:
         await db.work_plans.update_one({"_id": plan["_id"]}, {"$unset": {"work_order": ""}})
         raise
+    await record(
+        dispatcher,
+        "convert",
+        "work_order",
+        doc["_id"],
+        doc["work_order_number"],
+        details={"work_plan": plan["plan_number"]},
+    )
     return (await _out([doc]))[0]
 
 
@@ -159,6 +171,7 @@ async def start_work_order(id_or_number: str, principal: CurrentPrincipal):
     )
     if doc is None:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Work order is already {order['status']}")
+    await record(principal, "start", "work_order", doc["_id"], doc["work_order_number"])
     return (await _out([doc]))[0]
 
 
@@ -203,7 +216,7 @@ async def get_work_order(id_or_number: str, principal: CurrentPrincipal):
 
 
 @router.patch("/work-orders/{id_or_number}", response_model=WorkOrderOut)
-async def update_work_order(id_or_number: str, body: WorkOrderUpdate, _: Editor):
+async def update_work_order(id_or_number: str, body: WorkOrderUpdate, editor: Editor):
     order = await _get(id_or_number)
     changes = body.model_dump(mode="json", exclude_unset=True)
     for field in ("title", "service_type", "priority", "customer", "assigned_engineer_ids", "lead_engineer_id"):
@@ -222,14 +235,19 @@ async def update_work_order(id_or_number: str, body: WorkOrderUpdate, _: Editor)
     doc = await get_db().work_orders.find_one_and_update(
         {"_id": order["_id"]}, {"$set": changes}, return_document=ReturnDocument.AFTER
     )
-    return (await _out([require_found(doc, "Work order not found")]))[0]
+    doc = require_found(doc, "Work order not found")
+    await record(
+        editor, "update", "work_order", order["_id"], order["work_order_number"], changed=audit_changes(order, changes)
+    )
+    return (await _out([doc]))[0]
 
 
 @router.delete("/work-orders/{id_or_number}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_work_order(id_or_number: str, _: Editor):
+async def delete_work_order(id_or_number: str, editor: Editor):
     """Delete a work order. If it came from a work plan, the plan is unlocked again."""
     order = await _get(id_or_number)
     await get_db().work_orders.delete_one({"_id": order["_id"]})
+    await record(editor, "delete", "work_order", order["_id"], order["work_order_number"])
     if order.get("work_plan"):
         await get_db().work_plans.update_one(
             {"_id": order["work_plan"]["id"]}, {"$unset": {"work_order": ""}, "$set": {"updated_at": utcnow()}}

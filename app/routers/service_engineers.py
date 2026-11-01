@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import SecretStr
 
-from app.auth import require_roles
+from app.audit import record
+from app.auth import CurrentPrincipal, require_roles
 from app.db import get_db
 from app.models.role import Role
 from app.models.service_engineer import ServiceEngineerCreate, ServiceEngineerProfile
@@ -24,7 +25,7 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_roles(Role.ADMIN))],  # only admins may create users
 )
-async def provision_service_engineer(body: ServiceEngineerCreate):
+async def provision_service_engineer(body: ServiceEngineerCreate, actor: CurrentPrincipal):
     # Without a password from the form, generate a temporary one and return it once.
     generated = None if body.password else generate_temporary_password()
     password = body.password or SecretStr(generated or "")
@@ -37,6 +38,8 @@ async def provision_service_engineer(body: ServiceEngineerCreate):
     )
     profile = ServiceEngineerProfile(**body.model_dump(include=set(ServiceEngineerProfile.model_fields)))
     doc = from_doc(await insert_user(user, service_engineer=profile))
+    engineer_id = doc["service_engineer"]["engineer_id"]
+    await record(actor, "create", "service_engineer", doc["id"], engineer_id, details={"username": doc["username"]})
     return ServiceEngineerCreated(**doc, temporary_password=generated)
 
 

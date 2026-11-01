@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, UploadFile, status
 from fastapi.responses import Response
 
+from app.audit import record
 from app.auth import CurrentPrincipal, Principal
 from app.config import settings
 from app.db import get_db
@@ -47,7 +48,7 @@ def _require(principal: Principal, *roles: Role) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
 
 
-async def _save(user: dict, file: UploadFile) -> SignatureInfo:
+async def _save(user: dict, file: UploadFile, actor: Principal) -> SignatureInfo:
     limit = settings.signature_max_kb * 1024
     data = await file.read(limit + 1)
     if len(data) > limit:
@@ -71,10 +72,11 @@ async def _save(user: dict, file: UploadFile) -> SignatureInfo:
     old = user["service_engineer"].get("signature")
     if old and old.get("key"):
         await get_storage().delete(old["key"])
+    await record(actor, "upload", "signature", user["_id"], engineer_id, details={"replaced": bool(old)})
     return info
 
 
-async def _delete(user: dict) -> None:
+async def _delete(user: dict, actor: Principal) -> None:
     old = user["service_engineer"].get("signature")
     if not old:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No signature uploaded")
@@ -83,6 +85,7 @@ async def _delete(user: dict) -> None:
     )
     if old.get("key"):
         await get_storage().delete(old["key"])
+    await record(actor, "delete", "signature", user["_id"], user["service_engineer"]["engineer_id"])
 
 
 def _signature_of(user: dict) -> dict:
@@ -120,7 +123,7 @@ async def _image(user: dict) -> Response:
 async def upload_engineer_signature(engineer_id: str, file: UploadFile, principal: CurrentPrincipal):
     """Admin: upload or replace an engineer's signature (PNG only)."""
     _require(principal, Role.ADMIN)
-    return await _save(await _engineer(engineer_id), file)
+    return await _save(await _engineer(engineer_id), file, principal)
 
 
 @router.get("/service-engineers/{engineer_id}/signature", response_class=Response)
@@ -140,7 +143,7 @@ async def engineer_signature_link(engineer_id: str, principal: CurrentPrincipal)
 @router.delete("/service-engineers/{engineer_id}/signature", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_engineer_signature(engineer_id: str, principal: CurrentPrincipal):
     _require(principal, Role.ADMIN)
-    await _delete(await _engineer(engineer_id))
+    await _delete(await _engineer(engineer_id), principal)
 
 
 # ---- The engineer's own signature ----
@@ -149,7 +152,7 @@ async def delete_engineer_signature(engineer_id: str, principal: CurrentPrincipa
 @router.put("/users/me/signature", response_model=SignatureInfo)
 async def upload_my_signature(file: UploadFile, principal: CurrentPrincipal):
     """Service engineers: upload or replace your own signature (PNG only)."""
-    return await _save(await _self(principal), file)
+    return await _save(await _self(principal), file, principal)
 
 
 @router.get("/users/me/signature", response_class=Response)
@@ -164,4 +167,4 @@ async def my_signature_link(principal: CurrentPrincipal):
 
 @router.delete("/users/me/signature", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_my_signature(principal: CurrentPrincipal):
-    await _delete(await _self(principal))
+    await _delete(await _self(principal), principal)

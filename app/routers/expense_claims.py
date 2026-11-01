@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pymongo import ReturnDocument
 
+from app.audit import record
 from app.auth import CurrentPrincipal, Principal
 from app.config import settings
 from app.db import get_db
@@ -130,6 +131,9 @@ async def submit_expense_claim(body: ExpenseClaimCreate, principal: CurrentPrinc
         "updated_at": now,
     }
     await db.expense_claims.insert_one(doc)
+    await record(
+        principal, "create", "expense_claim", doc["_id"], doc["claim_number"], details={"amount": float(amount)}
+    )
     return _out(doc)
 
 
@@ -182,6 +186,7 @@ async def withdraw_expense_claim(claim_id_or_number: str, principal: CurrentPrin
     """The claimant can withdraw a claim while it's still pending."""
     doc = await _own_pending(claim_id_or_number, principal)
     await get_db().expense_claims.delete_one({"_id": doc["_id"]})
+    await record(principal, "withdraw", "expense_claim", doc["_id"], doc["claim_number"])
     if (doc.get("receipt") or {}).get("key"):
         await get_storage().delete(doc["receipt"]["key"])
 
@@ -215,6 +220,9 @@ async def upload_receipt(claim_id_or_number: str, file: UploadFile, principal: C
     )
     if (doc.get("receipt") or {}).get("key"):
         await get_storage().delete(doc["receipt"]["key"])
+    await record(
+        principal, "upload_receipt", "expense_claim", doc["_id"], doc["claim_number"], details={"filename": filename}
+    )
     return _out(updated)
 
 
@@ -309,6 +317,15 @@ async def _act(
     )
     if doc is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Claim was updated by someone else; reload and try again")
+    await record(
+        principal,
+        action.value,
+        "expense_claim",
+        claim["_id"],
+        doc["claim_number"],
+        changed={"status": [current.value, new_status.value]},
+        details={"note": note, "payment_reference": payment_reference},
+    )
     return doc
 
 

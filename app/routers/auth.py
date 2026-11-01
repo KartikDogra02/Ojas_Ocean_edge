@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 
+from app.audit import record
 from app.auth import AuthenticatedPrincipal
 from app.config import settings
 from app.db import get_db
@@ -88,6 +89,7 @@ async def change_password(body: PasswordChange, principal: AuthenticatedPrincipa
             }
         },
     )
+    await record(principal, "change_password", "user", principal.user_id, principal.username)
     token, expires_in = create_access_token(str(principal.user_id))
     return Token(access_token=token, expires_in=expires_in, must_change_password=False)
 

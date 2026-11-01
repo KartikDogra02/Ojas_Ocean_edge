@@ -6,6 +6,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pymongo import DeleteOne, UpdateOne
 
+from app.audit import record
 from app.auth import CurrentPrincipal, Principal, require_roles
 from app.config import settings
 from app.db import get_db
@@ -206,6 +207,7 @@ async def save_daily_entries(body: DayEntriesUpdate, editor: Editor):
         }
         ops.append(UpdateOne(key, {"$set": fields}, upsert=True))
     await db.planner_days.bulk_write(ops)
+    await record(editor, "update", "planner_days", details={"entries": body.model_dump(mode="json")["entries"]})
     cleared = sum(e.status is None for e in body.entries)
     return EntriesSaved(saved=len(body.entries) - cleared, cleared=cleared)
 
@@ -236,6 +238,7 @@ async def update_engineer_planner_details(engineer_id: str, body: EngineerPlanne
         )
         if result.matched_count == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Service engineer not found")
+        await record(editor, "update", "planner_engineer", number=engineer_id.upper(), details={"set": changes})
     start, _ = _window()
     planner = await _day_planner(editor, start, 1, engineer_id)
     if not planner.engineers:
@@ -316,5 +319,6 @@ async def save_monthly_entries(body: MonthEntriesUpdate, editor: Editor):
             fields = {"status": e.status.value, "note": e.note, "updated_by": editor.username, "updated_at": now}
             ops.append(UpdateOne(key, {"$set": fields}, upsert=True))
     await db.planner_months.bulk_write(ops)
+    await record(editor, "update", "planner_months", details={"entries": body.model_dump(mode="json")["entries"]})
     cleared = sum(e.status is None for e in body.entries)
     return EntriesSaved(saved=len(body.entries) - cleared, cleared=cleared)

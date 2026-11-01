@@ -5,6 +5,7 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import Response
 
+from app.audit import record
 from app.auth import CurrentPrincipal
 from app.config import settings
 from app.db import get_db
@@ -154,6 +155,9 @@ async def submit_fsr(body: FsrCreate, principal: CurrentPrincipal):
             {"$set": {"status": order["status"], "field_service_report": None}, "$unset": {"completed_at": ""}},
         )
         raise
+    await record(
+        principal, "submit", "fsr", doc["_id"], doc["fsr_number"], details={"work_order": order["work_order_number"]}
+    )
     return _out(doc)
 
 

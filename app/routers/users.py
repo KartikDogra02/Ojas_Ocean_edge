@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from app.audit import changes, record
 from app.auth import AuthenticatedPrincipal, Principal, require_roles
 from app.db import get_db
 from app.models.common import utcnow
@@ -20,12 +21,14 @@ Admin: TypeAlias = Annotated[Principal, Depends(require_roles(Role.ADMIN))]
 _ENGINEER_ROLE_ERROR = "The service_engineer role is managed through /service-engineers"
 
 
-@router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, dependencies=admin_only)
-async def create_user(user: UserCreate):
+@router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def create_user(user: UserCreate, admin: Admin):
     if Role.SERVICE_ENGINEER in user.roles:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, _ENGINEER_ROLE_ERROR)
     # The admin chose this password, so the user must replace it at first login.
-    return from_doc(await insert_user(user))
+    doc = await insert_user(user)
+    await record(admin, "create", "user", doc["_id"], doc["username"], details={"roles": doc["roles"]})
+    return from_doc(doc)
 
 
 @router.get("", response_model=list[UserOut], dependencies=admin_only)
@@ -54,43 +57,53 @@ async def get_user(user_id: str):
 async def update_user(user_id: str, user: UserUpdate, admin: Admin):
     db = get_db()
     oid = to_oid(user_id)
-    existing = await db.users.find_one({"_id": oid}, {"roles": 1})
+    existing = await db.users.find_one({"_id": oid}, USER_PROJECTION)
     if existing is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     is_engineer = Role.SERVICE_ENGINEER.value in existing.get("roles", [])
 
-    changes = user.model_dump(exclude_unset=True, exclude={"password", "service_engineer"})
+    changes_ = user.model_dump(exclude_unset=True, exclude={"password", "service_engineer"})
     if user.roles is not None:
         if (Role.SERVICE_ENGINEER in user.roles) != is_engineer:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, _ENGINEER_ROLE_ERROR)
         await ensure_roles_exist(user.roles)
-        changes["roles"] = role_values(user.roles)
+        changes_["roles"] = role_values(user.roles)
     if user.password is not None:
-        changes["hashed_password"] = hash_password(user.password.get_secret_value())
-        changes["password_changed_at"] = utcnow()
+        changes_["hashed_password"] = hash_password(user.password.get_secret_value())
+        changes_["password_changed_at"] = utcnow()
         # A password set by an admin for someone else is temporary.
         if oid != admin.user_id:
-            changes["must_change_password"] = True
+            changes_["must_change_password"] = True
     if user.service_engineer is not None:
         if not is_engineer:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "User is not a service engineer")
         for field, value in user.service_engineer.model_dump(exclude_unset=True).items():
-            changes[f"service_engineer.{field}"] = value
+            changes_[f"service_engineer.{field}"] = value
 
-    changes["updated_at"] = utcnow()
+    changes_["updated_at"] = utcnow()
     try:
         doc = await db.users.find_one_and_update(
-            {"_id": oid}, {"$set": changes}, projection=USER_PROJECTION, return_document=ReturnDocument.AFTER
+            {"_id": oid}, {"$set": changes_}, projection=USER_PROJECTION, return_document=ReturnDocument.AFTER
         )
     except DuplicateKeyError as exc:
         raise duplicate_key_error(exc) from exc
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    await record(
+        admin,
+        "update",
+        "user",
+        oid,
+        doc["username"],
+        changed=changes(existing, changes_),
+        details={"password_reset": True} if user.password is not None else None,
+    )
     return from_doc(doc)
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=admin_only)
-async def delete_user(user_id: str):
-    result = await get_db().users.delete_one({"_id": to_oid(user_id)})
-    if result.deleted_count == 0:
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: str, admin: Admin):
+    user = await get_db().users.find_one_and_delete({"_id": to_oid(user_id)}, {"username": 1})
+    if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    await record(admin, "delete", "user", user["_id"], user["username"])

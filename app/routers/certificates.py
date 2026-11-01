@@ -2,7 +2,8 @@ from typing import Annotated, TypeAlias
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
-from app.auth import Principal, require_roles
+from app.audit import record
+from app.auth import CurrentPrincipal, Principal, require_roles
 from app.db import get_db
 from app.models.certificate import CertificateCreate, CertificateOut, InstrumentType, TestPoint, Verdict
 from app.models.common import utcnow
@@ -91,6 +92,14 @@ async def create_certificate(body: CertificateCreate, issuer: Issuer):
         "created_at": utcnow(),
     }
     await db.certificates.insert_one(doc)
+    await record(
+        issuer,
+        "issue",
+        "certificate",
+        doc["_id"],
+        doc["certificate_number"],
+        details={"result": doc["result"], "serial_number": doc["serial_number"]},
+    )
     return _out(doc)
 
 
@@ -136,7 +145,8 @@ async def get_certificate(certificate_id_or_number: str):
 
 
 @router.delete("/{certificate_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=admin_only)
-async def delete_certificate(certificate_id: str):
-    result = await get_db().certificates.delete_one({"_id": to_oid(certificate_id)})
-    if result.deleted_count == 0:
+async def delete_certificate(certificate_id: str, actor: CurrentPrincipal):
+    doc = await get_db().certificates.find_one_and_delete({"_id": to_oid(certificate_id)}, {"certificate_number": 1})
+    if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Certificate not found")
+    await record(actor, "delete", "certificate", doc["_id"], doc["certificate_number"])

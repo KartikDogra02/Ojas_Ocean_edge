@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from app.audit import changes as audit_changes
+from app.audit import record
 from app.auth import Principal, require_roles
 from app.db import get_db
 from app.models.common import utcnow
@@ -51,6 +53,7 @@ async def create_reference_standard(body: ReferenceStandardCreate, creator: Crea
         await get_db().reference_standards.insert_one(doc)
     except DuplicateKeyError as exc:
         raise _duplicate(exc) from exc
+    await record(creator, "create", "reference_standard", doc["_id"], doc["serial_number"])
     return _out(doc)
 
 
@@ -79,7 +82,7 @@ async def get_reference_standard(standard_id: str):
 
 
 @router.patch("/{standard_id}", response_model=ReferenceStandardOut)
-async def update_reference_standard(standard_id: str, body: ReferenceStandardUpdate, _: Editor):
+async def update_reference_standard(standard_id: str, body: ReferenceStandardUpdate, editor: Editor):
     existing = await _get(standard_id)
     changes = body.model_dump(exclude_unset=True)
     required = set(ReferenceStandardCreate.model_fields) - {"traceability_agency", "storage_location_id"}
@@ -97,15 +100,25 @@ async def update_reference_standard(standard_id: str, body: ReferenceStandardUpd
         )
     except DuplicateKeyError as exc:
         raise _duplicate(exc) from exc
-    return _out(require_found(doc, "Reference standard not found"))
+    doc = require_found(doc, "Reference standard not found")
+    await record(
+        editor,
+        "update",
+        "reference_standard",
+        existing["_id"],
+        existing["serial_number"],
+        changed=audit_changes(existing, changes),
+    )
+    return _out(doc)
 
 
 @router.delete("/{standard_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_reference_standard(standard_id: str, _: Editor):
+async def delete_reference_standard(standard_id: str, editor: Editor):
     oid = to_oid(standard_id)
     used_by = await get_db().certificates.count_documents({"reference_standard_ids": oid})
     if used_by:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Reference standard is used by {used_by} certificate(s)")
-    result = await get_db().reference_standards.delete_one({"_id": oid})
-    if result.deleted_count == 0:
+    doc = await get_db().reference_standards.find_one_and_delete({"_id": oid}, {"serial_number": 1})
+    if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reference standard not found")
+    await record(editor, "delete", "reference_standard", oid, doc["serial_number"])

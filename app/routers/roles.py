@@ -3,7 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from app.auth import require_roles
+from app.audit import changes as changes_of
+from app.audit import record
+from app.auth import CurrentPrincipal, require_roles
 from app.db import get_db
 from app.models.common import utcnow
 from app.models.permission import default_menu_permissions
@@ -60,7 +62,7 @@ async def get_role(role_id_or_code: str):
 
 
 @router.post("", response_model=RoleOut, status_code=status.HTTP_201_CREATED, dependencies=admin_only)
-async def create_role(body: RoleCreate):
+async def create_role(body: RoleCreate, actor: CurrentPrincipal):
     now = utcnow()
     doc = body.model_dump() | {
         "is_system": False,
@@ -72,11 +74,12 @@ async def create_role(body: RoleCreate):
         await get_db().roles.insert_one(doc)
     except DuplicateKeyError:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Role code '{body.code}' already exists") from None
+    await record(actor, "create", "role", doc["_id"], body.code, details={"name": body.name})
     return RoleOut(**from_doc(doc), user_count=0)
 
 
 @router.patch("/{role_id_or_code}", response_model=RoleOut, dependencies=admin_only)
-async def update_role(role_id_or_code: str, body: RoleUpdate):
+async def update_role(role_id_or_code: str, body: RoleUpdate, actor: CurrentPrincipal):
     role = await _get_role(role_id_or_code)
     # name and is_active can't be cleared; description can (null removes it).
     changes = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None or k == "description"}
@@ -88,11 +91,12 @@ async def update_role(role_id_or_code: str, body: RoleUpdate):
     updated = await get_db().roles.find_one_and_update(
         {"_id": role["_id"]}, {"$set": changes}, return_document=ReturnDocument.AFTER
     )
+    await record(actor, "update", "role", role["_id"], role["code"], changed=changes_of(role, changes))
     return await _out(require_found(updated, "Role not found"))
 
 
 @router.delete("/{role_id_or_code}", status_code=status.HTTP_204_NO_CONTENT, dependencies=admin_only)
-async def delete_role(role_id_or_code: str):
+async def delete_role(role_id_or_code: str, actor: CurrentPrincipal):
     db = get_db()
     role = await _get_role(role_id_or_code)
     if role["is_system"]:
@@ -109,3 +113,4 @@ async def delete_role(role_id_or_code: str):
     # Inactive users may still hold the role; remove it from them too.
     await db.users.update_many({"roles": role["code"]}, {"$pull": {"roles": role["code"]}})
     await db.roles.delete_one({"_id": role["_id"]})
+    await record(actor, "delete", "role", role["_id"], role["code"])

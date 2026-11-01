@@ -3,7 +3,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo import UpdateOne
 
-from app.auth import CurrentPrincipal, require_roles
+from app.audit import record
+from app.auth import CurrentPrincipal, Principal, require_roles
 from app.db import get_db
 from app.models.common import utcnow
 from app.models.permission import (
@@ -67,6 +68,11 @@ async def _apply(changes: list[tuple[str, str, bool]]) -> datetime:
     return now
 
 
+async def _audit(actor: Principal, changes: list[tuple[str, str, bool]]) -> None:
+    entries = [{"menu_id": menu_id, "role": code, "allowed": allowed} for menu_id, code, allowed in changes]
+    await record(actor, "update", "permissions", details={"changes": entries})
+
+
 @router.get("/permissions", response_model=PermissionMatrix)
 @router.get("/roles/permissions/matrix", response_model=PermissionMatrix)
 async def get_permissions():
@@ -74,7 +80,7 @@ async def get_permissions():
 
 
 @router.put("/permissions", response_model=PermissionsUpdateResult, dependencies=admin_only)
-async def update_permissions(body: PermissionsUpdate):
+async def update_permissions(body: PermissionsUpdate, actor: CurrentPrincipal):
     """Bulk save from the permissions grid: one entry per menu item, with a flag per role."""
     unknown_menus = sorted({m.menu_id for m in body.permissions} - MENU_IDS)
     if unknown_menus:
@@ -84,13 +90,16 @@ async def update_permissions(body: PermissionsUpdate):
     if not changes:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "No permissions to update")
     now = await _apply(changes)
+    await _audit(actor, changes)
     return PermissionsUpdateResult(detail=_UPDATED, updated_count=len(body.permissions), timestamp=now)
 
 
 @router.put("/roles/permissions/matrix", response_model=MatrixUpdateResult, dependencies=admin_only)
-async def update_permission_matrix(body: MatrixUpdate):
+async def update_permission_matrix(body: MatrixUpdate, actor: CurrentPrincipal):
     """Bulk save as individual (menu_id, role_code, is_allowed) entries."""
-    now = await _apply([(e.menu_id, e.role_code, e.is_allowed) for e in body.matrix])
+    changes = [(e.menu_id, e.role_code, e.is_allowed) for e in body.matrix]
+    now = await _apply(changes)
+    await _audit(actor, changes)
     return MatrixUpdateResult(detail=_UPDATED, updated_records=len(body.matrix), timestamp=now)
 
 
