@@ -65,6 +65,15 @@ create a bucket in it and set `R2_ENDPOINT=http://s3:8333`.
   real time zone.
 - **Paging:** list endpoints take `skip` and `limit` (1–500) and return the total in an `X-Total-Count` header.
 
+## Audit log and request logs
+
+- **Audit log:** every change (users, roles, permissions, planner, work plans/orders, FSRs, expense claims, certificates,
+  reference standards, signatures, password changes) records who did it, when, and the fields changed (before → after).
+  Passwords and hashes are never stored. Admin and owner can read it at `GET /audit-log?entity_type=&entity=&actor=&action=&since=&until=`
+  (`entity` takes an id or a number such as `WO-2026-001`). Entries are kept for `AUDIT_RETENTION_DAYS` (730).
+- **Request logs:** one line per request (method, path, status, duration, user). Each response has an `X-Request-ID`
+  header (a client-supplied one is reused), and audit entries store the same id. `LOG_LEVEL` sets the level (INFO).
+
 ## CORS
 
 Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated exact origins, e.g.
