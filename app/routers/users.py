@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo import ReturnDocument
@@ -15,7 +15,7 @@ from app.services import duplicate_key_error, ensure_roles_exist, insert_user, r
 
 router = APIRouter(prefix="/users", tags=["users"])
 admin_only = [Depends(require_roles(Role.ADMIN))]
-Admin = Annotated[Principal, Depends(require_roles(Role.ADMIN))]
+Admin: TypeAlias = Annotated[Principal, Depends(require_roles(Role.ADMIN))]
 
 _ENGINEER_ROLE_ERROR = "The service_engineer role is managed through /service-engineers"
 

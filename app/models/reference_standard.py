@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from pydantic import BeforeValidator, ConfigDict, Field, model_validator
 
@@ -11,8 +11,10 @@ def _upper(v: object) -> object:
 
 
 # Codes like "FLK-754-009183", "NIST-STD-2026-131", "LAB-SAFE-02".
-Code = Annotated[str, BeforeValidator(_upper), Field(min_length=1, max_length=50, pattern=r"^[A-Z0-9][A-Z0-9._/-]*$")]
-Text = Annotated[str, Field(min_length=1, max_length=200)]
+Code: TypeAlias = Annotated[
+    str, BeforeValidator(_upper), Field(min_length=1, max_length=50, pattern=r"^[A-Z0-9][A-Z0-9._/-]*$")
+]
+Text: TypeAlias = Annotated[str, Field(min_length=1, max_length=200)]
 
 
 class ReferenceStandardCreate(StrictModel):

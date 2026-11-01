@@ -1,5 +1,5 @@
 from datetime import UTC, date, datetime, time
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,7 +13,7 @@ from app.routers.common import from_doc, to_oid
 from app.services import next_sequence
 
 router = APIRouter(prefix="/certificates", tags=["certificates"])
-Issuer = Annotated[Principal, Depends(require_roles(Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER))]
+Issuer: TypeAlias = Annotated[Principal, Depends(require_roles(Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER))]
 admin_only = [Depends(require_roles(Role.ADMIN))]
 
 

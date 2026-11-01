@@ -1,10 +1,12 @@
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from pydantic import BeforeValidator, ConfigDict, Field
 
 from app.models.common import LabeledEnum, StrictModel, Timestamps, lowercase
 
-RoleCode = Annotated[str, BeforeValidator(lowercase), Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")]
+RoleCode: TypeAlias = Annotated[
+    str, BeforeValidator(lowercase), Field(min_length=2, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+]
 
 
 class Role(LabeledEnum):

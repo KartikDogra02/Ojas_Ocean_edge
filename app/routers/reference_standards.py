@@ -1,5 +1,5 @@
 from datetime import UTC, date, datetime, time
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo import ReturnDocument
@@ -13,8 +13,8 @@ from app.models.role import Role
 from app.routers.common import from_doc, to_oid
 
 router = APIRouter(prefix="/reference-standards", tags=["reference-standards"])
-Creator = Annotated[Principal, Depends(require_roles(Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER))]
-Editor = Annotated[Principal, Depends(require_roles(Role.ADMIN, Role.TECHNICAL_TEAM))]
+Creator: TypeAlias = Annotated[Principal, Depends(require_roles(Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER))]
+Editor: TypeAlias = Annotated[Principal, Depends(require_roles(Role.ADMIN, Role.TECHNICAL_TEAM))]
 
 _DATE_FIELDS = ("calibration_date", "due_date")
 _DUPLICATE_LABELS = {"serial_number": "Serial number", "master_cert_number": "Master cert number"}

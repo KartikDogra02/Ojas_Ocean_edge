@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -22,10 +22,10 @@ from app.services import next_sequence
 
 router = APIRouter(tags=["work-orders"])
 # Only the technical team creates work orders, directly or by converting a work plan.
-Dispatcher = Annotated[
+Dispatcher: TypeAlias = Annotated[
     Principal, Depends(require_roles(Role.TECHNICAL_TEAM, detail="Only the technical team can dispatch work orders"))
 ]
-Editor = Annotated[Principal, Depends(require_roles(Role.ADMIN, Role.TECHNICAL_TEAM))]
+Editor: TypeAlias = Annotated[Principal, Depends(require_roles(Role.ADMIN, Role.TECHNICAL_TEAM))]
 
 
 def _lead(engineer_ids: list[str], lead: str | None) -> str:
