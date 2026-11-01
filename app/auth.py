@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 import jwt
 from bson import ObjectId
@@ -72,7 +72,7 @@ async def get_authenticated_principal(token: Annotated[str | None, Depends(oauth
     )
 
 
-AuthenticatedPrincipal = Annotated[Principal, Depends(get_authenticated_principal)]
+AuthenticatedPrincipal: TypeAlias = Annotated[Principal, Depends(get_authenticated_principal)]
 
 
 async def get_principal(principal: AuthenticatedPrincipal) -> Principal:
@@ -82,7 +82,7 @@ async def get_principal(principal: AuthenticatedPrincipal) -> Principal:
     return principal
 
 
-CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
+CurrentPrincipal: TypeAlias = Annotated[Principal, Depends(get_principal)]
 
 
 def require_roles(*allowed: Role, detail: str = "Insufficient role"):

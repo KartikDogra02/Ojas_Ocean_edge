@@ -1,13 +1,13 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.common import Password, StrictModel, Username
 from app.models.territory import Territory
 
-Phone = Annotated[str, Field(min_length=7, max_length=20, pattern=r"^\+?[0-9 ()\-.]+$")]
-Skill = Annotated[str, Field(min_length=1, max_length=100)]
+Phone: TypeAlias = Annotated[str, Field(min_length=7, max_length=20, pattern=r"^\+?[0-9 ()\-.]+$")]
+Skill: TypeAlias = Annotated[str, Field(min_length=1, max_length=100)]
 
 
 def _split_skills(value: object) -> object:

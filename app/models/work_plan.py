@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from pydantic import BeforeValidator, ConfigDict, EmailStr, Field
 
@@ -26,7 +26,7 @@ def _upper(v: object) -> object:
     return v.upper() if isinstance(v, str) else v
 
 
-EngineerId = Annotated[str, BeforeValidator(_upper), Field(pattern=r"^ENG-\d{4}-\d{3,}$")]
+EngineerId: TypeAlias = Annotated[str, BeforeValidator(_upper), Field(pattern=r"^ENG-\d{4}-\d{3,}$")]
 
 
 class Customer(StrictModel):

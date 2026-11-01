@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, SecretStr
 
@@ -34,5 +34,7 @@ def lowercase(v: object) -> object:
     return v.lower() if isinstance(v, str) else v
 
 
-Username = Annotated[str, BeforeValidator(lowercase), Field(min_length=3, max_length=50, pattern=r"^[a-z0-9._-]+$")]
-Password = Annotated[SecretStr, Field(min_length=8, max_length=128)]
+Username: TypeAlias = Annotated[
+    str, BeforeValidator(lowercase), Field(min_length=3, max_length=50, pattern=r"^[a-z0-9._-]+$")
+]
+Password: TypeAlias = Annotated[SecretStr, Field(min_length=8, max_length=128)]

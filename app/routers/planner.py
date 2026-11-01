@@ -1,5 +1,5 @@
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Annotated
+from typing import Annotated, TypeAlias
 from zoneinfo import ZoneInfo
 
 from bson import ObjectId
@@ -31,7 +31,7 @@ from app.models.role import Role
 
 router = APIRouter(prefix="/planner", tags=["planner"])
 # Only HR and the technical team change the planner.
-Editor = Annotated[
+Editor: TypeAlias = Annotated[
     Principal,
     Depends(
         require_roles(Role.HR_TEAM, Role.TECHNICAL_TEAM, detail="Only HR and the technical team can change the planner")
