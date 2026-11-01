@@ -155,6 +155,12 @@ docker compose up -d mongo
 uv run pytest
 ```
 
+Before pushing, run the same checks as CI (`.github/workflows/ci.yml`, which runs on every PR and on `main`):
+
+```bash
+uv run ruff check && uv run ruff format --check && uv run pyright && uv run pytest
+```
+
 ## Admin CLI
 
 Create an extra admin, e.g. to recover access if every admin is locked out:
