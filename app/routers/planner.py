@@ -38,9 +38,6 @@ Editor: TypeAlias = Annotated[
     ),
 ]
 
-# HR and the technical team see every engineer (admin and owner too, read-only).
-# Service engineers only see their own row and can't change it.
-_VIEW_ALL = {Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value, Role.ADMIN.value, Role.OWNER.value}
 _ENGINEER = {"roles": Role.SERVICE_ENGINEER.value, "is_active": True}
 
 
@@ -61,7 +58,7 @@ def _dt(day: date) -> datetime:
 
 async def _engineers(principal: Principal, engineer_id: str | None = None) -> list[dict]:
     query = dict(_ENGINEER)
-    if not principal.roles & _VIEW_ALL:
+    if not principal.can_view_all:
         if Role.SERVICE_ENGINEER.value not in principal.roles:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
         query["_id"] = principal.user_id

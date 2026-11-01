@@ -9,8 +9,6 @@ from app.routers.work_plans import own_engineer_id
 
 router = APIRouter(prefix="/check-ins", tags=["check-ins"])
 
-# Admin, HR, technical team and owner see everyone's check-ins; service engineers only their own.
-_VIEW_ALL = {Role.ADMIN.value, Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value, Role.OWNER.value}
 
 
 def _out(doc: dict) -> CheckInOut:
@@ -18,7 +16,7 @@ def _out(doc: dict) -> CheckInOut:
 
 
 async def _scope(principal: CurrentPrincipal, engineer_id: str | None) -> dict:
-    if principal.roles & _VIEW_ALL:
+    if principal.can_view_all:
         return {"engineer_id": engineer_id.upper()} if engineer_id else {}
     own = await own_engineer_id(principal)
     if own is None:

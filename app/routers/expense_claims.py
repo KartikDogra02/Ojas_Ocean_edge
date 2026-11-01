@@ -30,8 +30,6 @@ from app.storage import FileNotFound, content_disposition, get_storage
 
 router = APIRouter(prefix="/expense-claims", tags=["expense-claims"])
 
-# Approvers and HR see every claim; everyone else only their own.
-_VIEW_ALL = {Role.ADMIN.value, Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value, Role.OWNER.value}
 # The claim status each role acts on.
 _ACTS_ON = {
     Role.TECHNICAL_TEAM.value: ExpenseStatus.PENDING,
@@ -78,9 +76,9 @@ def _lookup(claim_id_or_number: str) -> dict:
 
 
 async def _get(claim_id_or_number: str, principal: Principal) -> dict:
-    """Claimants see their own claims; HR and admin see everyone's."""
+    """Claimants see their own claims; view-all roles (admin, HR, technical team, owner) see everyone's."""
     query = _lookup(claim_id_or_number)
-    if not principal.roles & _VIEW_ALL:
+    if not principal.can_view_all:
         query["claimant.user_id"] = principal.user_id
     doc = await get_db().expense_claims.find_one(query)
     if doc is None:
@@ -153,7 +151,7 @@ async def list_expense_claims(
     `awaiting_my_action=true` lists the claims waiting for you (others' claims at your stage).
     """
     query: dict = {}
-    if not principal.roles & _VIEW_ALL:
+    if not principal.can_view_all:
         query["claimant.user_id"] = principal.user_id
     elif claimant_id is not None and ObjectId.is_valid(claimant_id):
         query["claimant.user_id"] = ObjectId(claimant_id)

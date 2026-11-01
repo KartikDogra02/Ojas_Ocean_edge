@@ -63,7 +63,7 @@ def _lookup(id_or_number: str) -> dict:
 
 
 async def _get(id_or_number: str, principal: CurrentPrincipal) -> dict:
-    """Admin, HR and technical team see every FSR; service engineers only those for work orders they were on."""
+    """View-all roles see every FSR; service engineers only those for work orders they were on."""
     doc = await get_db().field_service_reports.find_one(_lookup(id_or_number) | await plan_visibility(principal))
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Field service report not found")

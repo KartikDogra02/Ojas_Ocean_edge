@@ -179,7 +179,7 @@ async def list_work_orders(
     skip: int = 0,
     limit: int = 100,
 ):
-    """Admin, HR and technical team see every work order; service engineers only those they're assigned to."""
+    """View-all roles see every work order; service engineers only those they're assigned to."""
     query = await plan_visibility(principal)
     if priority is not None:
         query["priority"] = priority.value

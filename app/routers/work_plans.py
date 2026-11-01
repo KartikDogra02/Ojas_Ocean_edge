@@ -21,7 +21,6 @@ from app.services import next_sequence
 router = APIRouter(prefix="/work-plans", tags=["work-plans"])
 Planner: TypeAlias = Annotated[Principal, Depends(require_roles(Role.ADMIN, Role.TECHNICAL_TEAM))]
 
-_VIEW_ALL = {Role.ADMIN.value, Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value}
 
 
 async def validate_engineers(engineer_ids: list[str]) -> list[str]:
@@ -87,8 +86,8 @@ async def own_engineer_id(principal: Principal) -> str | None:
 
 
 async def plan_visibility(principal: Principal) -> dict:
-    """Admin, HR and technical team see every plan; service engineers only plans they're assigned to."""
-    if principal.roles & _VIEW_ALL:
+    """View-all roles (admin, HR, technical team, owner) see every plan; service engineers only their own."""
+    if principal.can_view_all:
         return {}
     if Role.SERVICE_ENGINEER.value in principal.roles:
         return {"assigned_engineer_ids": await own_engineer_id(principal)}

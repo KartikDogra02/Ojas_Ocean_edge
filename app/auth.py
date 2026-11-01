@@ -28,6 +28,17 @@ class Principal:
     def is_admin(self) -> bool:
         return Role.ADMIN.value in self.roles
 
+    @property
+    def can_view_all(self) -> bool:
+        """Sees every record (plans, orders, FSRs, planner, claims, check-ins), not just their own."""
+        return bool(self.roles & VIEW_ALL_ROLES)
+
+
+# Roles that can view everyone's records. Service engineers only see their own. What each role can *change*
+# is decided separately by require_roles(...) on each write endpoint (e.g. the owner is read-only apart from
+# expense approvals).
+VIEW_ALL_ROLES = frozenset({Role.ADMIN.value, Role.HR_TEAM.value, Role.TECHNICAL_TEAM.value, Role.OWNER.value})
+
 
 def _unauthorized(detail: str = "Invalid or expired token") -> HTTPException:
     return HTTPException(status.HTTP_401_UNAUTHORIZED, detail, headers={"WWW-Authenticate": "Bearer"})
