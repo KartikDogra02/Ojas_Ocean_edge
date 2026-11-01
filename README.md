@@ -9,11 +9,21 @@ cp .env.example .env   # then edit the values - at minimum MONGO_ROOT_PASSWORD, 
 docker compose up -d --build
 ```
 
-- API: http://localhost:8000 (interactive docs at `/docs`)
+- API: http://localhost:8000/api/v1 (interactive docs at http://localhost:8000/docs)
 - MongoDB: `localhost:27017` (bound to localhost only, auth required)
 
 On startup the API creates an admin user from the `INITIAL_ADMIN_*` settings if no admin exists yet.
 That admin must change their password on first login.
+
+## API versions
+
+Every endpoint is under `/api/v1` (e.g. `POST /api/v1/auth/login`, `GET /api/v1/users`); paths in this README are
+relative to it. `/health` and the docs stay at the root.
+
+The old unversioned paths (`/users`, `/auth/login`, …) still work so the frontend can switch over gradually, but they
+are hidden from the docs, every response has `Deprecation: true` and a `Link` header pointing at the `/api/v1` path,
+and each use is logged by `app.deprecated` (`Old path used: GET /users (use /api/v1/users) user=…`). Once those log
+lines stop, the old paths can be removed.
 
 ## Auth
 
@@ -124,6 +134,8 @@ Expense claims go `pending` → `technical_approved` → `owner_approved` → `r
 technical team or owner at their stage). Nobody can act on their own claim, or act on the same claim twice.
 
 ## Main endpoints
+
+All paths are relative to `/api/v1`.
 
 | Endpoint | Access |
 |---|---|
