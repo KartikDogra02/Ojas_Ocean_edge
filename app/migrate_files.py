@@ -82,9 +82,7 @@ async def _refs() -> list[FileRef]:
                 legacy_file_id=receipt.get("file_id"),
             )
         )
-    async for user in database.users.find(
-        {"service_engineer.signature": {"$exists": True}}, {"service_engineer": 1}
-    ):
+    async for user in database.users.find({"service_engineer.signature": {"$exists": True}}, {"service_engineer": 1}):
         signature = user["service_engineer"]["signature"]
         engineer_id = user["service_engineer"]["engineer_id"]
         refs.append(
@@ -119,9 +117,7 @@ async def _delete_sources(ref: FileRef, target_is_gridfs: bool) -> int:
             deleted += 1
         except NoFile:
             pass
-        await db.get_db()[ref.collection].update_one(
-            {"_id": ref.doc_id}, {"$unset": {f"{ref.path}.file_id": ""}}
-        )
+        await db.get_db()[ref.collection].update_one({"_id": ref.doc_id}, {"$unset": {f"{ref.path}.file_id": ""}})
     # A keyed GridFS copy is the live file when GridFS is the target, so only delete it when moving to R2.
     if not target_is_gridfs and await GridFSStorage().exists(ref.key):
         await GridFSStorage().delete(ref.key)

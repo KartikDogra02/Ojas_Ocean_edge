@@ -99,4 +99,4 @@ async def test_custom_roles_do_not_grant_api_access(client, admin, make_user):
 def test_view_all_roles_match_expectations():
     from app.auth import VIEW_ALL_ROLES
 
-    assert VIEW_ALL_ROLES == {r.value for r in (Role.ADMIN, Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.OWNER)}
+    assert {r.value for r in (Role.ADMIN, Role.HR_TEAM, Role.TECHNICAL_TEAM, Role.OWNER)} == VIEW_ALL_ROLES

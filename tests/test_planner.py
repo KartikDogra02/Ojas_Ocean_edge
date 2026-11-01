@@ -52,10 +52,20 @@ async def test_work_order_must_include_engineer(client, tech, engineer, engineer
         await client.post(
             "/work-orders",
             headers=tech.headers,
-            json={"title": "W", "service_type": "inspection", "assigned_engineer_ids": [engineer.engineer_id], "customer": {"company": "C"}},
+            json={
+                "title": "W",
+                "service_type": "inspection",
+                "assigned_engineer_ids": [engineer.engineer_id],
+                "customer": {"company": "C"},
+            },
         )
     ).json()
-    ok = {"engineer_id": engineer.engineer_id, "date": day(0), "status": "ship", "work_order": order["work_order_number"]}
+    ok = {
+        "engineer_id": engineer.engineer_id,
+        "date": day(0),
+        "status": "ship",
+        "work_order": order["work_order_number"],
+    }
     assert (await client.put("/planner/daily", headers=tech.headers, json={"entries": [ok]})).status_code == 200
     wrong = ok | {"engineer_id": engineer2.engineer_id}
     assert (await client.put("/planner/daily", headers=tech.headers, json={"entries": [wrong]})).status_code == 422

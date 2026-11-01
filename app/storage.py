@@ -135,9 +135,7 @@ class R2Storage:
 def get_storage() -> Storage:
     if settings.storage_backend == "r2":
         missing = [
-            name
-            for name in ("r2_access_key_id", "r2_secret_access_key", "r2_bucket")
-            if not getattr(settings, name)
+            name for name in ("r2_access_key_id", "r2_secret_access_key", "r2_bucket") if not getattr(settings, name)
         ]
         if not (settings.r2_account_id or settings.r2_endpoint):
             missing.append("r2_account_id")

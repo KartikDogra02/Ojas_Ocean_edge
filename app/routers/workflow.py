@@ -80,9 +80,7 @@ async def workflow(
     # One chain per work plan (with its work order, if converted), plus one per work order created directly.
     pairs = [(p, orders.get(p["work_order"]["id"]) if p.get("work_order") else None) for p in plans]
     pairs += [(None, o) for o in orders.values() if not o.get("work_plan")]
-    engineers = await engineers_by_id(
-        {e for plan, order in pairs for e in (order or plan)["assigned_engineer_ids"]}
-    )
+    engineers = await engineers_by_id({e for plan, order in pairs for e in (order or plan)["assigned_engineer_ids"]})
 
     chains: list[WorkflowChain] = []
     for plan, order in pairs:

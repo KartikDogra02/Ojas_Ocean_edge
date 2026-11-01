@@ -24,12 +24,25 @@ async def test_missing_file_raises():
 
 
 async def test_migrates_legacy_receipt(client, engineer):
-    claim = (await client.post("/expense-claims", headers=engineer.headers, json={"category": "other", "amount": 5, "description": "x"})).json()
+    claim = (
+        await client.post(
+            "/expense-claims", headers=engineer.headers, json={"category": "other", "amount": 5, "description": "x"}
+        )
+    ).json()
     database = db.get_db()
     file_id = await AsyncGridFSBucket(database, bucket_name="receipts").upload_from_stream("old.pdf", PDF)
     await database.expense_claims.update_one(
         {"claim_number": claim["claim_number"]},
-        {"$set": {"receipt": {"file_id": file_id, "filename": "old.pdf", "content_type": "application/pdf", "size": len(PDF)}}},
+        {
+            "$set": {
+                "receipt": {
+                    "file_id": file_id,
+                    "filename": "old.pdf",
+                    "content_type": "application/pdf",
+                    "size": len(PDF),
+                }
+            }
+        },
     )
     before = await client.get(f"/expense-claims/{claim['id']}/receipt", headers=engineer.headers)
     assert before.status_code == 404  # not migrated yet

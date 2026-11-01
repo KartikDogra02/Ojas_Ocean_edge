@@ -42,8 +42,12 @@ async def test_signature_png_only(client, admin, engineer):
 
 
 async def test_signature_replace_and_delete(client, engineer):
-    await client.put("/users/me/signature", headers=engineer.headers, files={"file": ("a.png", png(10, 5), "image/png")})
-    await client.put("/users/me/signature", headers=engineer.headers, files={"file": ("b.png", png(20, 5), "image/png")})
+    await client.put(
+        "/users/me/signature", headers=engineer.headers, files={"file": ("a.png", png(10, 5), "image/png")}
+    )
+    await client.put(
+        "/users/me/signature", headers=engineer.headers, files={"file": ("b.png", png(20, 5), "image/png")}
+    )
     me = (await client.get("/users/me", headers=engineer.headers)).json()
     assert me["service_engineer"]["signature"]["width"] == 20
     assert (await client.delete("/users/me/signature", headers=engineer.headers)).status_code == 204

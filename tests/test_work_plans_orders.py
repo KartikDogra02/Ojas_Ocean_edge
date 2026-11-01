@@ -25,7 +25,9 @@ async def test_plan_numbering_and_fields(plan):
 
 
 async def test_draft_without_engineers(client, tech):
-    plan = (await client.post("/work-plans", headers=tech.headers, json={"title": "D", "customer": {"company": "C"}})).json()
+    plan = (
+        await client.post("/work-plans", headers=tech.headers, json={"title": "D", "customer": {"company": "C"}})
+    ).json()
     assert plan["status"] == "draft"
 
 
@@ -56,19 +58,29 @@ async def test_convert_copies_plan_and_locks_it(client, tech, plan, engineer):
 
     locked = (await client.get(f"/work-plans/{plan['plan_number']}", headers=tech.headers)).json()
     assert locked["status"] == "converted" and locked["work_order"]["work_order_number"] == order["work_order_number"]
-    assert (await client.patch(f"/work-plans/{plan['id']}", headers=tech.headers, json={"title": "X"})).status_code == 409
+    assert (
+        await client.patch(f"/work-plans/{plan['id']}", headers=tech.headers, json={"title": "X"})
+    ).status_code == 409
     assert (await client.delete(f"/work-plans/{plan['id']}", headers=tech.headers)).status_code == 409
-    again = await client.post(f"/work-plans/{plan['id']}/convert", headers=tech.headers, json={"service_type": "inspection"})
+    again = await client.post(
+        f"/work-plans/{plan['id']}/convert", headers=tech.headers, json={"service_type": "inspection"}
+    )
     assert again.status_code == 409
 
 
 async def test_only_technical_team_converts(client, admin, plan):
-    response = await client.post(f"/work-plans/{plan['id']}/convert", headers=admin.headers, json={"service_type": "inspection"})
+    response = await client.post(
+        f"/work-plans/{plan['id']}/convert", headers=admin.headers, json={"service_type": "inspection"}
+    )
     assert response.status_code == 403
 
 
 async def test_deleting_converted_order_unlocks_plan(client, tech, plan):
-    order = (await client.post(f"/work-plans/{plan['id']}/convert", headers=tech.headers, json={"service_type": "inspection"})).json()
+    order = (
+        await client.post(
+            f"/work-plans/{plan['id']}/convert", headers=tech.headers, json={"service_type": "inspection"}
+        )
+    ).json()
     assert (await client.delete(f"/work-orders/{order['id']}", headers=tech.headers)).status_code == 204
     assert (await client.get(f"/work-plans/{plan['id']}", headers=tech.headers)).json()["status"] == "assigned"
 
@@ -94,7 +106,11 @@ async def test_lead_engineer_rules(client, tech, engineer, engineer2):
 
 
 async def test_start_work_order(client, tech, engineer, engineer2, plan):
-    order = (await client.post(f"/work-plans/{plan['id']}/convert", headers=tech.headers, json={"service_type": "inspection"})).json()
+    order = (
+        await client.post(
+            f"/work-plans/{plan['id']}/convert", headers=tech.headers, json={"service_type": "inspection"}
+        )
+    ).json()
     path = f"/work-orders/{order['id']}/start"
     assert (await client.post(path, headers=engineer2.headers)).status_code == 403
     started = await client.post(path, headers=engineer.headers)
@@ -104,7 +120,11 @@ async def test_start_work_order(client, tech, engineer, engineer2, plan):
 
 async def test_engineers_see_only_their_orders(client, tech, engineer, engineer2):
     body = {"title": "W", "service_type": "inspection", "customer": {"company": "C"}}
-    await client.post("/work-orders", headers=tech.headers, json=body | {"assigned_engineer_ids": [engineer.engineer_id]})
-    other = await client.post("/work-orders", headers=tech.headers, json=body | {"assigned_engineer_ids": [engineer2.engineer_id]})
+    await client.post(
+        "/work-orders", headers=tech.headers, json=body | {"assigned_engineer_ids": [engineer.engineer_id]}
+    )
+    other = await client.post(
+        "/work-orders", headers=tech.headers, json=body | {"assigned_engineer_ids": [engineer2.engineer_id]}
+    )
     assert len((await client.get("/work-orders", headers=engineer.headers)).json()) == 1
     assert (await client.get(f"/work-orders/{other.json()['id']}", headers=engineer.headers)).status_code == 404

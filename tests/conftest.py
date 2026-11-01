@@ -18,10 +18,9 @@ from dataclasses import dataclass  # noqa: E402
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 from asgi_lifespan import LifespanManager  # noqa: E402
-from pydantic import SecretStr  # noqa: E402
-
 from pwdlib import PasswordHash  # noqa: E402
 from pwdlib.hashers.argon2 import Argon2Hasher  # noqa: E402
+from pydantic import SecretStr  # noqa: E402
 
 import app.security  # noqa: E402
 from app import db  # noqa: E402

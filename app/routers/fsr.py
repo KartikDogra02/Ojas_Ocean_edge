@@ -1,6 +1,5 @@
 import base64
 import binascii
-from decimal import Decimal
 
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, status

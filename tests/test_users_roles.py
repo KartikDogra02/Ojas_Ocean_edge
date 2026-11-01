@@ -30,7 +30,9 @@ async def test_system_roles_seeded_and_protected(client, admin):
 async def test_custom_role_lifecycle(client, admin, make_user):
     created = await client.post("/roles", headers=admin.headers, json={"code": "sonar_specialist", "name": "Sonar"})
     assert created.status_code == 201
-    assert (await client.post("/roles", headers=admin.headers, json={"code": "sonar_specialist", "name": "X"})).status_code == 409
+    assert (
+        await client.post("/roles", headers=admin.headers, json={"code": "sonar_specialist", "name": "X"})
+    ).status_code == 409
     user = await make_user("sonar_specialist")
     assert (await client.delete("/roles/sonar_specialist", headers=admin.headers)).status_code == 400
     await client.patch(f"/users/{user.user_id}", headers=admin.headers, json={"is_active": False})
@@ -40,7 +42,12 @@ async def test_custom_role_lifecycle(client, admin, make_user):
 async def test_permission_matrix_bulk_update_is_all_or_nothing(client, admin):
     good = {"permissions": [{"menu_id": "menu-subsea", "permissions": {"hr_team": True}}]}
     assert (await client.put("/permissions", headers=admin.headers, json=good)).status_code == 200
-    bad = {"permissions": [{"menu_id": "menu-users", "permissions": {"hr_team": False}}, {"menu_id": "menu-x", "permissions": {}}]}
+    bad = {
+        "permissions": [
+            {"menu_id": "menu-users", "permissions": {"hr_team": False}},
+            {"menu_id": "menu-x", "permissions": {}},
+        ]
+    }
     assert (await client.put("/permissions", headers=admin.headers, json=bad)).status_code == 422
     matrix = (await client.get("/permissions", headers=admin.headers)).json()
     users_menu = next(m for m in matrix["menu_items"] if m["menu_id"] == "menu-users")
@@ -50,7 +57,9 @@ async def test_permission_matrix_bulk_update_is_all_or_nothing(client, admin):
 
 
 async def test_my_menus(client, hr, engineer):
-    hr_menus = {m["menu_id"] for m in (await client.get("/permissions/me", headers=hr.headers)).json()["authorized_menus"]}
+    hr_menus = {
+        m["menu_id"] for m in (await client.get("/permissions/me", headers=hr.headers)).json()["authorized_menus"]
+    }
     engineer_menus = {
         m["menu_id"] for m in (await client.get("/permissions/me", headers=engineer.headers)).json()["authorized_menus"]
     }

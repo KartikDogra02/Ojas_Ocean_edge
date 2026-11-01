@@ -7,11 +7,11 @@ from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
 from app.db import get_db
+from app.models.common import utcnow
 from app.models.permission import default_menu_permissions
 from app.models.role import SYSTEM_ROLE_DESCRIPTIONS, Role
 from app.models.service_engineer import ServiceEngineerProfile
 from app.models.user import UserCreate
-from app.models.common import utcnow
 from app.security import hash_password
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,9 @@ async def insert_user(
     if service_engineer is not None:
         # Check for duplicates first so failed inserts don't burn sequential engineer IDs.
         await ensure_unique(email=user.email, username=user.username)
-        doc["service_engineer"] = {"engineer_id": await next_sequence("engineer_id", "ENG")} | service_engineer.model_dump()
+        doc["service_engineer"] = {
+            "engineer_id": await next_sequence("engineer_id", "ENG")
+        } | service_engineer.model_dump()
     try:
         await get_db().users.insert_one(doc)
     except DuplicateKeyError as exc:
@@ -137,7 +139,9 @@ async def seed_initial_admin() -> None:
         settings.initial_admin_password,
     )
     if not (email and username and password):
-        logger.warning("No admin user exists and INITIAL_ADMIN_* is not set; set them and restart, or use `python -m app.cli`.")
+        logger.warning(
+            "No admin user exists and INITIAL_ADMIN_* is not set; set them and restart, or use `python -m app.cli`."
+        )
         return
     user = UserCreate(email=email, username=username, password=SecretStr(password), roles=[Role.ADMIN])
     try:

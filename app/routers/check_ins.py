@@ -10,7 +10,6 @@ from app.routers.work_plans import own_engineer_id
 router = APIRouter(prefix="/check-ins", tags=["check-ins"])
 
 
-
 def _out(doc: dict) -> CheckInOut:
     return CheckInOut(**doc | {"id": str(doc["_id"])})
 

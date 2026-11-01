@@ -27,9 +27,7 @@ async def login(form: Annotated[OAuth2PasswordRequestForm, Depends()]):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect username or password")
 
     token, expires_in = create_access_token(str(user["_id"]))
-    return Token(
-        access_token=token, expires_in=expires_in, must_change_password=user.get("must_change_password", True)
-    )
+    return Token(access_token=token, expires_in=expires_in, must_change_password=user.get("must_change_password", True))
 
 
 @router.post("/change-password", response_model=Token)
@@ -67,4 +65,3 @@ async def logout(principal: AuthenticatedPrincipal):
         {"$setOnInsert": {"user_id": principal.user_id, "expires_at": principal.token_expires_at}},
         upsert=True,
     )
-

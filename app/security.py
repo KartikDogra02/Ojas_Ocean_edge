@@ -43,5 +43,8 @@ def create_access_token(user_id: str) -> tuple[str, int]:
 def decode_access_token(token: str) -> dict:
     """Raises jwt.InvalidTokenError if the token is invalid or expired."""
     return jwt.decode(
-        token, settings.jwt_secret, algorithms=[settings.jwt_algorithm], options={"require": ["sub", "jti", "iat", "exp"]}
+        token,
+        settings.jwt_secret,
+        algorithms=[settings.jwt_algorithm],
+        options={"require": ["sub", "jti", "iat", "exp"]},
     )

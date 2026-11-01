@@ -22,7 +22,6 @@ router = APIRouter(prefix="/work-plans", tags=["work-plans"])
 Planner: TypeAlias = Annotated[Principal, Depends(require_roles(Role.ADMIN, Role.TECHNICAL_TEAM))]
 
 
-
 async def validate_engineers(engineer_ids: list[str]) -> list[str]:
     """De-duplicate and check every ID belongs to an active service engineer."""
     ids = list(dict.fromkeys(engineer_ids))
