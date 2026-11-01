@@ -1,5 +1,6 @@
 import contextlib
 import logging
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from pydantic import SecretStr
@@ -67,7 +68,7 @@ async def next_sequence(counter: str, prefix: str, *, monthly: bool = False, dig
     Monthly: CAL-2026-10-0001, restarting each month. With `digits` the number has a fixed width
     and the period is capped at that many (e.g. 4 digits = 9999 per month).
     """
-    now = utcnow()
+    now = utcnow().astimezone(ZoneInfo(settings.app_timezone))
     period = f"{now.year}-{now.month:02d}" if monthly else f"{now.year}"
     doc = await get_db().counters.find_one_and_update(
         {"_id": f"{counter}:{period}"},

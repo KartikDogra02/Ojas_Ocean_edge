@@ -38,7 +38,14 @@ async def lifespan(app: FastAPI):
     await db.disconnect()
 
 
-app = FastAPI(title="Ojas Ocean Edge API", lifespan=lifespan)
+docs = settings.api_docs_enabled
+app = FastAPI(
+    title="Ojas Ocean Edge API",
+    lifespan=lifespan,
+    docs_url="/docs" if docs else None,
+    redoc_url="/redoc" if docs else None,
+    openapi_url="/openapi.json" if docs else None,
+)
 
 if "*" in settings.cors_origin_list:
     raise RuntimeError("CORS_ORIGINS must list exact origins; '*' is not allowed with credentials")
@@ -48,6 +55,7 @@ app.add_middleware(
     allow_credentials=True,  # needed if the frontend later uses cookie-based auth
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["X-Total-Count", "Retry-After"],  # readable by the frontend (paging totals, login lockout)
     max_age=600,
 )
 authenticated = [Depends(get_principal)]

@@ -41,7 +41,7 @@ Editor: TypeAlias = Annotated[
 
 
 def _today() -> date:
-    return datetime.now(ZoneInfo(settings.planner_timezone)).date()
+    return datetime.now(ZoneInfo(settings.app_timezone)).date()
 
 
 def _window() -> tuple[date, date]:
