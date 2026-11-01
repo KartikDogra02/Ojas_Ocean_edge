@@ -56,6 +56,15 @@ It exits with code 1 and lists any file it couldn't copy (for example one alread
 For local testing without R2: `docker compose --profile s3 up -d s3` starts an S3-compatible SeaweedFS server;
 create a bucket in it and set `R2_ENDPOINT=http://s3:8333`.
 
+## Security settings
+
+- **Login lockout:** after `LOGIN_MAX_ATTEMPTS` (5) failed logins for the same username from the same address, further
+  attempts get `429` with a `Retry-After` header for `LOGIN_LOCKOUT_MINUTES` (15).
+- **API docs:** `/docs`, `/redoc` and `/openapi.json` can be turned off with `API_DOCS_ENABLED=false`.
+- **Startup checks:** the API refuses to start if `JWT_SECRET` is shorter than 32 characters or `APP_TIMEZONE` isn't a
+  real time zone.
+- **Paging:** list endpoints take `skip` and `limit` (1–500) and return the total in an `X-Total-Count` header.
+
 ## CORS
 
 Browser frontends must be listed in `CORS_ORIGINS` in `.env` (comma-separated exact origins, e.g.
@@ -129,7 +138,8 @@ technical team or owner at their stage). Nobody can act on their own claim, or a
 
 Planner: HR and the technical team see every engineer and make changes; admin and owner can view everyone
 (read-only); service engineers see only their own row and can't change it.
-`PLANNER_TIMEZONE` (default UTC) decides what "today" is.
+`APP_TIMEZONE` (default UTC; `PLANNER_TIMEZONE` also accepted) decides what "today" is, and the month in
+document numbers such as `CAL-2026-10-0001`.
 | `POST /expense-claims` | Logged in — submit your own claim; `amount` or (Travel & Fuel) `distance_km` at `MILEAGE_RATE_PER_KM` |
 | `GET /expense-claims?status=&category=&work_plan=&claimant_id=&awaiting_my_action=` | Admin, HR, technical team and owner see all claims; everyone else sees their own |
 | `POST /expense-claims/{id}/receipt` | Claimant, while pending — PDF/JPEG/PNG/WebP up to `RECEIPT_MAX_MB` |
