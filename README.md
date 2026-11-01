@@ -65,6 +65,16 @@ create a bucket in it and set `R2_ENDPOINT=http://s3:8333`.
   real time zone.
 - **Paging:** list endpoints take `skip` and `limit` (1–500) and return the total in an `X-Total-Count` header.
 
+## Running in production (Docker image)
+
+- The image installs exactly the versions in `uv.lock` (no dev tools) and runs as an unprivileged user.
+- `WEB_CONCURRENCY` sets the number of worker processes (default 2; roughly one per CPU core).
+- **Behind a reverse proxy / load balancer:** set `FORWARDED_ALLOW_IPS` to the proxy's address (or `*` if only the
+  proxy can reach the container) so client IPs come from `X-Forwarded-For`. The login lockout counts failures per
+  client IP, so without this every user appears to come from the proxy. Don't use `*` if the API is reachable directly:
+  clients could then fake their IP.
+- The container has a healthcheck on `/health`; `docker compose ps` shows `healthy` once it's serving.
+
 ## Audit log and request logs
 
 - **Audit log:** every change (users, roles, permissions, planner, work plans/orders, FSRs, expense claims, certificates,
