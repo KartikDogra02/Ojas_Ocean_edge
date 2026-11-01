@@ -89,7 +89,7 @@ async def test_request_ids_link_responses_to_audit_entries(client, admin):
     assert response.headers["X-Request-ID"] == "req-abc-123"
     [entry] = await entries(client, admin.headers, entity_type="role")
     assert entry["request_id"] == "req-abc-123"
-    assert len((await client.get("/health")).headers["X-Request-ID"]) == 32  # generated when not sent
+    assert len((await client.get("http://test/health")).headers["X-Request-ID"]) == 32  # generated when not sent
 
 
 async def test_audit_entries_expire_after_the_retention_period():

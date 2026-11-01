@@ -7,7 +7,7 @@ from tests.conftest import PASSWORD, login
 
 
 async def test_health(client):
-    assert (await client.get("/health")).json() == {"status": "ok"}
+    assert (await client.get("http://test/health")).json() == {"status": "ok"}
 
 
 async def test_login_by_username_or_email(client, admin):

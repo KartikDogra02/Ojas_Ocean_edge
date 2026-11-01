@@ -47,7 +47,7 @@ class TestUser:
 @pytest.fixture(scope="session")
 async def client():
     async with LifespanManager(app):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test/api/v1") as c:
             yield c
         assert db.client is not None
         await db.client.drop_database(db.get_db().name)
