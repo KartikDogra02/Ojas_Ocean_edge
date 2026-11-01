@@ -24,6 +24,18 @@ def get_db() -> AsyncDatabase:
     return client[settings.mongo_db]
 
 
+async def _ensure_ttl(collection, field: str, seconds: int) -> None:
+    """A TTL index on `field`, updating its expiry if the setting changed since it was created."""
+    name = f"{field}_1"
+    existing = {i["name"]: i async for i in await collection.list_indexes()}
+    if name not in existing:
+        await collection.create_index(field, expireAfterSeconds=seconds)
+    elif existing[name].get("expireAfterSeconds") != seconds:
+        await collection.database.command(
+            "collMod", collection.name, index={"keyPattern": {field: 1}, "expireAfterSeconds": seconds}
+        )
+
+
 async def ensure_indexes() -> None:
     db = get_db()
     await db.roles.create_index("code", unique=True)
@@ -63,6 +75,10 @@ async def ensure_indexes() -> None:
     # Planner days are only kept until the day after their date.
     await db.planner_days.create_index("expire_at", expireAfterSeconds=0)
     await db.planner_months.create_index([("engineer_id", 1), ("year", 1), ("month", 1)], unique=True)
+    # Audit log: newest first, by entity or actor; entries are removed after AUDIT_RETENTION_DAYS.
+    await db.audit_log.create_index([("entity.type", 1), ("entity.id", 1), ("at", -1)])
+    await db.audit_log.create_index([("actor.username", 1), ("at", -1)])
+    await _ensure_ttl(db.audit_log, "at", settings.audit_retention_days * 86400)
     # Failed logins; each record disappears once its lockout window has passed.
     await db.login_attempts.create_index("expire_at", expireAfterSeconds=0)
     # Logged-out tokens; Mongo deletes each entry once the token would have expired anyway.

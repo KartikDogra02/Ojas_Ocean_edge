@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -6,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import db
 from app.auth import get_principal
 from app.config import settings
+from app.request_context import RequestLoggingMiddleware
 from app.routers import (
+    audit_log,
     auth,
     certificates,
     check_ins,
@@ -26,6 +29,8 @@ from app.routers import (
 )
 from app.services import seed_initial_admin, seed_system_roles
 from app.storage import get_storage
+
+logging.basicConfig(level=settings.log_level.upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 @asynccontextmanager
@@ -55,9 +60,14 @@ app.add_middleware(
     allow_credentials=True,  # needed if the frontend later uses cookie-based auth
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
-    expose_headers=["X-Total-Count", "Retry-After"],  # readable by the frontend (paging totals, login lockout)
+    expose_headers=[
+        "X-Total-Count",
+        "Retry-After",
+        "X-Request-ID",
+    ],  # readable by the frontend (paging totals, login lockout)
     max_age=600,
 )
+app.add_middleware(RequestLoggingMiddleware)
 authenticated = [Depends(get_principal)]
 app.include_router(options.router, dependencies=authenticated)
 app.include_router(roles.router, dependencies=authenticated)
@@ -75,6 +85,7 @@ app.include_router(workflow.router, dependencies=authenticated)
 app.include_router(planner.router, dependencies=authenticated)
 app.include_router(expense_claims.router, dependencies=authenticated)
 app.include_router(auth.router)
+app.include_router(audit_log.router, dependencies=authenticated)
 
 
 @app.get("/health")

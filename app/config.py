@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
 
+    # How long audit log entries are kept, and the log level for the app's own log lines.
+    audit_retention_days: int = 730
+    log_level: str = "INFO"
+
     # Serve the interactive API docs (/docs, /redoc, /openapi.json). Consider turning off in production.
     api_docs_enabled: bool = True
 

@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 from app.db import get_db
 from app.models.role import Role
+from app.request_context import set_username
 from app.security import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -73,6 +74,7 @@ async def get_authenticated_principal(token: Annotated[str | None, Depends(oauth
     if await get_db().revoked_tokens.count_documents({"_id": claims["jti"]}, limit=1):
         raise _unauthorized()
 
+    set_username(user["username"])  # for the request log line
     return Principal(
         user_id=user["_id"],
         username=user["username"],
