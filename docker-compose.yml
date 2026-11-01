@@ -6,15 +6,37 @@ services:
       # Root user is created only when the data volume is first initialised.
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?set MONGO_ROOT_USERNAME in .env}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+    # Single-node replica set, so the API can use transactions. With authentication on, replica set members need a
+    # shared key file; it's generated once into its own volume.
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        if [ ! -s /data/keyfile/mongo.key ]; then
+          head -c 756 /dev/urandom | base64 > /data/keyfile/mongo.key
+        fi
+        chmod 400 /data/keyfile/mongo.key
+        chown 999:999 /data/keyfile/mongo.key
+        exec docker-entrypoint.sh mongod --replSet rs0 --keyFile /data/keyfile/mongo.key --bind_ip_all
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongo_data:/data/db
+      - mongo_keyfile:/data/keyfile
+    # Healthy once this node is the writable primary; on the very first start it also initiates the replica set.
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD"
+          --authenticationDatabase admin --eval
+          "try { rs.status() } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}) };
+          print(db.hello().isWritablePrimary)" | grep -q true
       interval: 5s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 30
+      start_period: 10s
 
   api:
     build: .
@@ -25,7 +47,7 @@ services:
       - path: .env
         required: false
     environment:
-      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin&replicaSet=rs0
       MONGO_DB: ${MONGO_DB:-ojas_ocean_edge}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     depends_on:
@@ -45,4 +67,5 @@ services:
 
 volumes:
   mongo_data:
+  mongo_keyfile:
   s3_data:
