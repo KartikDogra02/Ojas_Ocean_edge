@@ -13,7 +13,7 @@ from app.models.role import Role
 from app.request_context import set_username
 from app.security import decode_access_token
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 @dataclass(frozen=True)

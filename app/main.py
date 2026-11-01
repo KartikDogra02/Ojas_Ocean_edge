@@ -1,12 +1,13 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import db
 from app.auth import get_principal
 from app.config import settings
+from app.legacy_paths import API_PREFIX, LegacyPathMiddleware
 from app.request_context import RequestLoggingMiddleware
 from app.routers import (
     audit_log,
@@ -64,28 +65,37 @@ app.add_middleware(
         "X-Total-Count",
         "Retry-After",
         "X-Request-ID",
-    ],  # readable by the frontend (paging totals, login lockout)
+        "Deprecation",
+        "Link",
+    ],  # readable by the frontend (paging totals, login lockout, old-path warnings)
     max_age=600,
 )
+app.add_middleware(LegacyPathMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 authenticated = [Depends(get_principal)]
-app.include_router(options.router, dependencies=authenticated)
-app.include_router(roles.router, dependencies=authenticated)
-app.include_router(permissions.router, dependencies=authenticated)
-app.include_router(users.router)  # routes declare their own auth (/users/me allows a pending password change)
-app.include_router(service_engineers.router, dependencies=authenticated)
-app.include_router(signatures.router, dependencies=authenticated)
-app.include_router(reference_standards.router, dependencies=authenticated)
-app.include_router(certificates.router, dependencies=authenticated)
-app.include_router(work_plans.router, dependencies=authenticated)
-app.include_router(work_orders.router, dependencies=authenticated)
-app.include_router(fsr.router, dependencies=authenticated)
-app.include_router(check_ins.router, dependencies=authenticated)
-app.include_router(workflow.router, dependencies=authenticated)
-app.include_router(planner.router, dependencies=authenticated)
-app.include_router(expense_claims.router, dependencies=authenticated)
-app.include_router(auth.router)
-app.include_router(audit_log.router, dependencies=authenticated)
+api = APIRouter()
+api.include_router(options.router, dependencies=authenticated)
+api.include_router(roles.router, dependencies=authenticated)
+api.include_router(permissions.router, dependencies=authenticated)
+api.include_router(users.router)  # routes declare their own auth (/users/me allows a pending password change)
+api.include_router(service_engineers.router, dependencies=authenticated)
+api.include_router(signatures.router, dependencies=authenticated)
+api.include_router(reference_standards.router, dependencies=authenticated)
+api.include_router(certificates.router, dependencies=authenticated)
+api.include_router(work_plans.router, dependencies=authenticated)
+api.include_router(work_orders.router, dependencies=authenticated)
+api.include_router(fsr.router, dependencies=authenticated)
+api.include_router(check_ins.router, dependencies=authenticated)
+api.include_router(workflow.router, dependencies=authenticated)
+api.include_router(planner.router, dependencies=authenticated)
+api.include_router(expense_claims.router, dependencies=authenticated)
+api.include_router(auth.router)
+api.include_router(audit_log.router, dependencies=authenticated)
+
+app.include_router(api, prefix=API_PREFIX)
+# The same endpoints at their old unversioned paths, hidden from the docs and marked deprecated, until the
+# frontend has moved to /api/v1.
+app.include_router(api, include_in_schema=False)
 
 
 @app.get("/health")
