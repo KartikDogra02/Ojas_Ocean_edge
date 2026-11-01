@@ -10,7 +10,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.reference_standard import ReferenceStandardCreate, ReferenceStandardOut, ReferenceStandardUpdate
 from app.models.role import Role
-from app.routers.common import from_doc, to_oid
+from app.routers.common import from_doc, require_found, to_oid
 
 router = APIRouter(prefix="/reference-standards", tags=["reference-standards"])
 Creator: TypeAlias = Annotated[Principal, Depends(require_roles(Role.TECHNICAL_TEAM, Role.SERVICE_ENGINEER))]
@@ -100,7 +100,7 @@ async def update_reference_standard(standard_id: str, body: ReferenceStandardUpd
         )
     except DuplicateKeyError as exc:
         raise _duplicate(exc) from exc
-    return _out(doc)
+    return _out(require_found(doc, "Reference standard not found"))
 
 
 @router.delete("/{standard_id}", status_code=status.HTTP_204_NO_CONTENT)

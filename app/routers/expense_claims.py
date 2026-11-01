@@ -23,7 +23,7 @@ from app.models.expense_claim import (
     ReviewDecision,
 )
 from app.models.role import Role
-from app.routers.common import FileLink, file_link
+from app.routers.common import FileLink, file_link, require_found
 from app.routers.work_plans import plan_lookup, plan_visibility
 from app.services import next_sequence
 from app.storage import FileNotFound, content_disposition, get_storage
@@ -114,7 +114,9 @@ async def submit_expense_claim(body: ExpenseClaimCreate, principal: CurrentPrinc
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Work plan not found")
         work_plan = {"id": plan["_id"], "plan_number": plan["plan_number"], "title": plan["title"]}
 
-    user = await db.users.find_one({"_id": principal.user_id}, {"username": 1, "full_name": 1})
+    user = require_found(
+        await db.users.find_one({"_id": principal.user_id}, {"username": 1, "full_name": 1}), "User not found"
+    )
     now = utcnow()
     doc = {
         "claim_number": await next_sequence("expense_claim", "EXP"),
@@ -205,10 +207,13 @@ async def upload_receipt(claim_id_or_number: str, file: UploadFile, principal: C
     key = f"receipts/{doc['claim_number']}/{uuid4().hex}{_EXTENSIONS[content_type]}"
     await get_storage().put(key, data, content_type)
     receipt = {"key": key, "filename": filename, "content_type": content_type, "size": len(data)}
-    updated = await get_db().expense_claims.find_one_and_update(
-        {"_id": doc["_id"]},
-        {"$set": {"receipt": receipt, "updated_at": utcnow()}},
-        return_document=ReturnDocument.AFTER,
+    updated = require_found(
+        await get_db().expense_claims.find_one_and_update(
+            {"_id": doc["_id"]},
+            {"$set": {"receipt": receipt, "updated_at": utcnow()}},
+            return_document=ReturnDocument.AFTER,
+        ),
+        "Expense claim not found",
     )
     if (doc.get("receipt") or {}).get("key"):
         await get_storage().delete(doc["receipt"]["key"])

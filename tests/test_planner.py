@@ -44,6 +44,7 @@ async def test_entries_totals_and_expiry(client, tech, engineer):
     from app import db
 
     entry = await db.get_db().planner_days.find_one({"engineer_id": engineer.engineer_id})
+    assert entry is not None
     assert entry["expire_at"].date() == TODAY + timedelta(days=1)
 
 

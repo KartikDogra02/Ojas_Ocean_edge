@@ -8,7 +8,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.permission import default_menu_permissions
 from app.models.role import Role, RoleCreate, RoleOut, RoleUpdate
-from app.routers.common import from_doc
+from app.routers.common import from_doc, require_found
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 admin_only = [Depends(require_roles(Role.ADMIN))]
@@ -87,7 +87,7 @@ async def update_role(role_id_or_code: str, body: RoleUpdate):
     updated = await get_db().roles.find_one_and_update(
         {"_id": role["_id"]}, {"$set": changes}, return_document=ReturnDocument.AFTER
     )
-    return await _out(updated)
+    return await _out(require_found(updated, "Role not found"))
 
 
 @router.delete("/{role_id_or_code}", status_code=status.HTTP_204_NO_CONTENT, dependencies=admin_only)

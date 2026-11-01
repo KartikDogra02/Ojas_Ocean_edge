@@ -5,13 +5,14 @@ from app.db import get_db
 from app.models.check_in import CheckInCreate, CheckInOut, PlaceType
 from app.models.common import utcnow
 from app.models.role import Role
+from app.routers.common import require_found
 from app.routers.work_plans import own_engineer_id
 
 router = APIRouter(prefix="/check-ins", tags=["check-ins"])
 
 
 def _out(doc: dict) -> CheckInOut:
-    return CheckInOut(**doc | {"id": str(doc["_id"])})
+    return CheckInOut.model_validate(doc | {"id": str(doc["_id"])})
 
 
 async def _scope(principal: CurrentPrincipal, engineer_id: str | None) -> dict:
@@ -29,7 +30,7 @@ async def check_in(body: CheckInCreate, principal: CurrentPrincipal):
     engineer_id = await own_engineer_id(principal)
     if engineer_id is None or Role.SERVICE_ENGINEER.value not in principal.roles:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only service engineers check in")
-    user = await get_db().users.find_one({"_id": principal.user_id}, {"full_name": 1})
+    user = require_found(await get_db().users.find_one({"_id": principal.user_id}, {"full_name": 1}), "User not found")
     doc = body.model_dump(mode="json") | {
         "engineer_id": engineer_id,
         "full_name": user.get("full_name"),

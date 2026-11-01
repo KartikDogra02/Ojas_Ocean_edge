@@ -1,5 +1,6 @@
 import re
 from collections import Counter, defaultdict
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
@@ -29,6 +30,12 @@ def _plan_status(plan: dict) -> WorkPlanStatus:
     if plan.get("work_order"):
         return WorkPlanStatus.CONVERTED
     return WorkPlanStatus.ASSIGNED if plan["assigned_engineer_ids"] else WorkPlanStatus.DRAFT
+
+
+def _created_at(chain: WorkflowChain) -> datetime:
+    """When the chain started: its plan, or the work order for work orders created directly."""
+    anchor = chain.plan or chain.work_order
+    return anchor.created_at if anchor else datetime.min.replace(tzinfo=UTC)
 
 
 def _stage(order: dict | None, has_fsr: bool, has_cert: bool) -> PipelineStage:
@@ -182,5 +189,5 @@ async def workflow(
             )
         ]
     # Newest first, by whichever step was created first.
-    chains.sort(key=lambda c: (c.plan or c.work_order).created_at, reverse=True)
+    chains.sort(key=_created_at, reverse=True)
     return Workflow(summary=summary, chains=chains[skip : skip + limit])

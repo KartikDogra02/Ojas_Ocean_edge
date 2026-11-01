@@ -51,4 +51,4 @@ class Settings(BaseSettings):
     initial_admin_password: str | None = None
 
 
-settings = Settings()
+settings = Settings()  # pyright: ignore[reportCallIssue] - required values come from the environment / .env

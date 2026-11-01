@@ -102,7 +102,7 @@ async def _refs() -> list[FileRef]:
 
 
 async def _read_source(ref: FileRef) -> bytes:
-    if ref.needs_copy_from_legacy:
+    if ref.needs_copy_from_legacy and ref.legacy_bucket:
         bucket = AsyncGridFSBucket(db.get_db(), bucket_name=ref.legacy_bucket)
         return await (await bucket.open_download_stream(ref.legacy_file_id)).read()
     return await GridFSStorage().get(ref.key)
@@ -111,7 +111,7 @@ async def _read_source(ref: FileRef) -> bytes:
 async def _delete_sources(ref: FileRef, target_is_gridfs: bool) -> int:
     """Delete GridFS copies that are no longer needed. Returns how many were deleted."""
     deleted = 0
-    if ref.legacy_file_id is not None:
+    if ref.legacy_file_id is not None and ref.legacy_bucket:
         try:
             await AsyncGridFSBucket(db.get_db(), bucket_name=ref.legacy_bucket).delete(ref.legacy_file_id)
             deleted += 1
@@ -163,7 +163,7 @@ async def migrate(dry_run: bool, delete_source: bool) -> Report:
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(prog="python -m app.migrate_files", description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(prog="python -m app.migrate_files", description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--dry-run", action="store_true", help="Show what would be copied; change nothing")
     parser.add_argument("--delete-source", action="store_true", help="Delete GridFS copies after a verified copy")
     args = parser.parse_args()

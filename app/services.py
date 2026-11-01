@@ -75,6 +75,8 @@ async def next_sequence(counter: str, prefix: str, *, monthly: bool = False, dig
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )
+    if doc is None:  # can't happen with upsert + AFTER, but keeps the type checker honest
+        raise RuntimeError(f"Counter {counter}:{period} wasn't created")
     seq = doc["seq"]
     if digits is not None and seq >= 10**digits:
         raise HTTPException(

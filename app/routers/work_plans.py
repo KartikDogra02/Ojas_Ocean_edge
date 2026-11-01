@@ -16,6 +16,7 @@ from app.models.work_plan import (
     WorkPlanStatus,
     WorkPlanUpdate,
 )
+from app.routers.common import require_found
 from app.services import next_sequence
 
 router = APIRouter(prefix="/work-plans", tags=["work-plans"])
@@ -178,7 +179,7 @@ async def update_work_plan(plan_id_or_number: str, body: WorkPlanUpdate, _: Plan
     )
     if doc is None:
         _not_converted(await _get(plan_id_or_number))  # converted in the meantime
-    return (await _out([doc]))[0]
+    return (await _out([require_found(doc, "Work plan not found")]))[0]
 
 
 @router.delete("/{plan_id_or_number}", status_code=status.HTTP_204_NO_CONTENT)

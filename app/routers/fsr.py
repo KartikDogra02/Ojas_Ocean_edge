@@ -11,7 +11,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.fsr import FsrCreate, FsrOut
 from app.models.work_order import WorkOrderStatus
-from app.routers.common import FileLink, file_link
+from app.routers.common import FileLink, file_link, require_found
 from app.routers.signatures import png_dimensions
 from app.routers.work_plans import own_engineer_id, plan_visibility
 from app.services import next_sequence
@@ -117,7 +117,9 @@ async def submit_fsr(body: FsrCreate, principal: CurrentPrincipal):
             {"name": p.name, "quantity": p.quantity, "unit_cost_cents": int(p.unit_cost * 100)}
             for p in body.spare_parts
         ]
-        user = await db.users.find_one({"_id": principal.user_id}, {"username": 1, "full_name": 1})
+        user = require_found(
+            await db.users.find_one({"_id": principal.user_id}, {"username": 1, "full_name": 1}), "User not found"
+        )
         doc = {
             "_id": fsr_id,
             "fsr_number": fsr_number,

@@ -7,6 +7,7 @@ from app.auth import AuthenticatedPrincipal
 from app.db import get_db
 from app.models.auth import PasswordChange, Token
 from app.models.common import utcnow
+from app.routers.common import require_found
 from app.security import DUMMY_HASH, create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -34,7 +35,7 @@ async def login(form: Annotated[OAuth2PasswordRequestForm, Depends()]):
 async def change_password(body: PasswordChange, principal: AuthenticatedPrincipal):
     """Change your own password. Works with a temporary password; returns a fresh token."""
     db = get_db()
-    user = await db.users.find_one({"_id": principal.user_id}, {"hashed_password": 1})
+    user = require_found(await db.users.find_one({"_id": principal.user_id}, {"hashed_password": 1}), "User not found")
     if not verify_password(body.current_password.get_secret_value(), user["hashed_password"]):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect")
     new_password = body.new_password.get_secret_value()

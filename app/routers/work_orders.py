@@ -17,6 +17,7 @@ from app.models.work_order import (
     WorkPlanConversion,
 )
 from app.models.work_plan import Priority
+from app.routers.common import require_found
 from app.routers.work_plans import engineers_by_id, own_engineer_id, plan_lookup, plan_visibility, validate_engineers
 from app.services import next_sequence
 
@@ -225,7 +226,7 @@ async def update_work_order(id_or_number: str, body: WorkOrderUpdate, _: Editor)
     doc = await get_db().work_orders.find_one_and_update(
         {"_id": order["_id"]}, {"$set": changes}, return_document=ReturnDocument.AFTER
     )
-    return (await _out([doc]))[0]
+    return (await _out([require_found(doc, "Work order not found")]))[0]
 
 
 @router.delete("/work-orders/{id_or_number}", status_code=status.HTTP_204_NO_CONTENT)

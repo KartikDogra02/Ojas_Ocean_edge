@@ -9,7 +9,7 @@ from app.db import get_db
 from app.models.common import utcnow
 from app.models.role import Role
 from app.models.user import UserCreate, UserOut, UserUpdate
-from app.routers.common import USER_PROJECTION, from_doc, to_oid
+from app.routers.common import USER_PROJECTION, from_doc, require_found, to_oid
 from app.security import hash_password
 from app.services import duplicate_key_error, ensure_roles_exist, insert_user, role_values
 
@@ -37,7 +37,7 @@ async def list_users(role: str | None = None, limit: int = 100):
 @router.get("/me", response_model=UserOut)
 async def get_me(principal: AuthenticatedPrincipal):
     doc = await get_db().users.find_one({"_id": principal.user_id}, USER_PROJECTION)
-    return from_doc(doc)
+    return from_doc(require_found(doc, "User not found"))
 
 
 @router.get("/{user_id}", response_model=UserOut, dependencies=admin_only)

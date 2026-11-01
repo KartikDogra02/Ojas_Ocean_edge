@@ -17,6 +17,13 @@ def to_oid(value: str) -> ObjectId:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid id") from None
 
 
+def require_found(doc: dict | None, detail: str = "Not found") -> dict:
+    """The document, or a 404 if a lookup or update matched nothing (e.g. it was deleted meanwhile)."""
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail)
+    return doc
+
+
 def from_doc(doc: dict) -> dict:
     doc["id"] = str(doc.pop("_id"))
     return doc
